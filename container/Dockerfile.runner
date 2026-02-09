@@ -1,8 +1,5 @@
 FROM ffreis/base-runner
 
-ARG APP_NAME=__APP_NAME__
-ENV APP_NAME=${APP_NAME}
-
 USER root
 
 WORKDIR /run
@@ -13,8 +10,9 @@ RUN apt-get update && \
     python3 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy app files
-COPY --chown=appuser:appgroup app/ ./
+# Copy only the necessary application files from builder
+COPY --chown=appuser:appgroup app/*.py ./
+COPY --chown=appuser:appgroup app/pyproject.toml ./
 
 RUN chmod 0750 /run/*.py
 

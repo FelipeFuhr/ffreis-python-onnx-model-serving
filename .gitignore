@@ -23,8 +23,14 @@ MANIFEST
 
 # Virtual environments
 venv/
+.venv/
 ENV/
 env/
+
+# uv
+.uv/
+uv.lock
+requirements.lock
 
 # PyCharm
 .idea/

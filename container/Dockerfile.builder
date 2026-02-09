@@ -8,11 +8,17 @@ RUN mkdir -p /build \
 
 WORKDIR /build
 
-USER appuser:appgroup
-
 COPY --chown=appuser:appgroup app/ .
 
-# No dependencies to install for now (requirements.txt is just a placeholder)
+# Install dependencies as root to avoid permission issues with Python 3.13
+RUN pip install --break-system-packages -e ".[dev]"
 
-ENTRYPOINT ["python3"]
-CMD ["main.py"]
+# Run tests to ensure everything works
+RUN pytest -v
+
+# Generate lock file for reproducibility
+RUN pip freeze > requirements.lock && chown appuser:appgroup requirements.lock
+
+USER appuser:appgroup
+
+ENTRYPOINT ["python3", "main.py"]

@@ -89,7 +89,7 @@ build-base-builder: build-base ## Build base-builder image
 	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-builder -t $(BASE_BUILDER_IMAGE) $(BASE_DIR)
 
 .PHONY: build-builder
-build-builder: build-base build-base-builder ## Build builder image
+build-builder: build-base build-base-builder ## Build builder image (installs deps, runs tests, generates lock file)
 	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.builder -t $(BUILDER_IMAGE) $(BASE_DIR)
 
 .PHONY: build-base-runner
@@ -97,9 +97,8 @@ build-base-runner: build-base ## Build base-runner image
 	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-runner -t $(BASE_RUNNER_IMAGE) $(BASE_DIR)
 
 .PHONY: build-runner
-build-runner: build-base-runner ## Build runner image
-	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.runner -t $(RUNNER_IMAGE) $(BASE_DIR) \
-		--build-arg APP_NAME="$(APP_NAME)"
+build-runner: build-base-runner build-builder ## Build runner image (minimal Python runtime)
+	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.runner -t $(RUNNER_IMAGE) $(BASE_DIR)
 
 .PHONY: build-images
 build-images: build-base build-base-builder build-builder build-base-runner build-runner ## Build all images (may be slow)

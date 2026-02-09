@@ -1,1 +1,2 @@
-# Add dependencies here as needed
+# Python dependencies managed by uv
+

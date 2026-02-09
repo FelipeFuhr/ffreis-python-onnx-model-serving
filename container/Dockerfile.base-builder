@@ -11,6 +11,5 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
 
 USER appuser:appgroup
