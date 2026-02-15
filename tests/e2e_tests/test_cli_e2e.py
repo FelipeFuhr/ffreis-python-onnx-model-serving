@@ -1,8 +1,8 @@
 """End-to-end smoke tests for the app executable path."""
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 

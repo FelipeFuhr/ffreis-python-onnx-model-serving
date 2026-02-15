@@ -51,7 +51,7 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Generate coverage report
-        
+
         run: |
           set -euo pipefail
           python -m pytest \

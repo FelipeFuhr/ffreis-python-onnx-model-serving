@@ -13,7 +13,6 @@ from onnx_model_serving.lib import (
     toggle,
 )
 
-
 pytestmark = pytest.mark.unit
 
 

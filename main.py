@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Main application entry point."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Support running `python main.py` from repository root without installation.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
