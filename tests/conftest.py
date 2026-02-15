@@ -1,6 +1,7 @@
 """Tests for conftest."""
 
 from collections.abc import AsyncIterator, Iterator
+from typing import Self
 
 import httpx
 import pytest
@@ -15,7 +16,7 @@ from parsed_types import ParsedInput
 class DummyAdapter:
     """Test suite for DummyAdapter."""
 
-    def __init__(self: object, mode: str = "list") -> None:
+    def __init__(self: Self, mode: str = "list") -> None:
         """Initialize adapter mode for tests.
 
         Parameters
@@ -30,7 +31,7 @@ class DummyAdapter:
         """
         self.mode = mode
 
-    def is_ready(self: object) -> bool:
+    def is_ready(self: Self) -> bool:
         """Report adapter readiness for tests.
 
         Returns
@@ -40,7 +41,7 @@ class DummyAdapter:
         """
         return True
 
-    def predict(self: object, parsed_input: ParsedInput) -> object:
+    def predict(self: Self, parsed_input: ParsedInput) -> object:
         """Return deterministic outputs for fixture-backed tests.
 
         Parameters

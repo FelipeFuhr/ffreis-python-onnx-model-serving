@@ -1,6 +1,8 @@
 """Test module."""
 
 import os
+from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -11,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 
 class _RaisesAdapter(BaseAdapter):
-    def is_ready(self: object) -> bool:
+    def is_ready(self: Self) -> bool:
         """Run is ready.
 
         Returns
@@ -21,7 +23,7 @@ class _RaisesAdapter(BaseAdapter):
         """
         return BaseAdapter.is_ready(self)
 
-    def predict(self: object, parsed_input: object) -> object:
+    def predict(self: Self, parsed_input: object) -> object:
         """Run predict.
 
         Parameters
@@ -40,7 +42,7 @@ class _RaisesAdapter(BaseAdapter):
 class TestBaseAdapter:
     """Test suite."""
 
-    def test_base_methods_raise_not_implemented(self: object) -> None:
+    def test_base_methods_raise_not_implemented(self: Self) -> None:
         """Validate base methods raise not implemented.
 
         Returns
@@ -55,7 +57,7 @@ class TestBaseAdapter:
             adapter.predict(None)
 
     def test_load_adapter_uses_onnx_when_model_type_is_onnx(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate load adapter uses onnx when model type is onnx.
 
@@ -73,7 +75,7 @@ class TestBaseAdapter:
         class FakeOnnx:
             """Test suite."""
 
-            def __init__(self: object, settings: object) -> None:
+            def __init__(self: Self, settings: object) -> None:
                 self.settings = settings
 
         import onnx_adapter as onnx_mod
@@ -85,7 +87,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakeOnnx)
 
     def test_load_adapter_uses_onnx_when_default_model_exists(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate load adapter uses onnx when default model exists.
 
@@ -107,7 +109,7 @@ class TestBaseAdapter:
         class FakeOnnx:
             """Test suite."""
 
-            def __init__(self: object, settings: object) -> None:
+            def __init__(self: Self, settings: object) -> None:
                 self.settings = settings
 
         import onnx_adapter as onnx_mod
@@ -121,7 +123,7 @@ class TestBaseAdapter:
         assert os.path.exists(model_path)
 
     def test_load_adapter_rejects_non_onnx_types(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate load adapter rejects non onnx types.
 
@@ -141,7 +143,7 @@ class TestBaseAdapter:
             load_adapter(settings)
 
     def test_load_adapter_requires_model_type_or_file(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate load adapter requires model type or file.
 

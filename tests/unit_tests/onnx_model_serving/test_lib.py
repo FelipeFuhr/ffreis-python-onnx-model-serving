@@ -1,5 +1,7 @@
 """Tests for lib.py functions."""
 
+from typing import Self
+
 import pytest
 
 from onnx_model_serving.lib import (
@@ -19,7 +21,7 @@ pytestmark = pytest.mark.unit
 class TestLib:
     """Test suite for TestLib."""
 
-    def test_add(self: object) -> None:
+    def test_add(self: Self) -> None:
         """Verify add.
 
         Returns
@@ -31,7 +33,7 @@ class TestLib:
         assert add(-1, 1) == 0
         assert add(0, 0) == 0
 
-    def test_greet(self: object) -> None:
+    def test_greet(self: Self) -> None:
         """Verify greet.
 
         Returns
@@ -41,7 +43,7 @@ class TestLib:
         """
         assert greet() == "Hello, world!"
 
-    def test_is_even(self: object) -> None:
+    def test_is_even(self: Self) -> None:
         """Verify is even.
 
         Returns
@@ -54,7 +56,7 @@ class TestLib:
         assert is_even(0) is True
         assert is_even(-2) is True
 
-    def test_clamp(self: object) -> None:
+    def test_clamp(self: Self) -> None:
         """Verify clamp.
 
         Returns
@@ -66,7 +68,7 @@ class TestLib:
         assert clamp(-5, 0, 10) == 0
         assert clamp(15, 0, 10) == 10
 
-    def test_repeat_word(self: object) -> None:
+    def test_repeat_word(self: Self) -> None:
         """Verify repeat word.
 
         Returns
@@ -78,7 +80,7 @@ class TestLib:
         assert repeat_word("test", 1) == "test"
         assert repeat_word("x", 0) == ""
 
-    def test_sum_list(self: object) -> None:
+    def test_sum_list(self: Self) -> None:
         """Verify sum list.
 
         Returns
@@ -90,7 +92,7 @@ class TestLib:
         assert sum_list([]) == 0
         assert sum_list([-1, 1]) == 0
 
-    def test_first_non_empty(self: object) -> None:
+    def test_first_non_empty(self: Self) -> None:
         """Verify first non empty.
 
         Returns
@@ -103,7 +105,7 @@ class TestLib:
         assert first_non_empty(["", "", ""]) is None
         assert first_non_empty([]) is None
 
-    def test_toggle(self: object) -> None:
+    def test_toggle(self: Self) -> None:
         """Verify toggle.
 
         Returns

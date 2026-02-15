@@ -3,6 +3,8 @@
 import os
 import sys
 import types
+from pathlib import Path
+from typing import Self
 
 import pytest
 
@@ -13,16 +15,16 @@ pytestmark = pytest.mark.unit
 
 
 class _FakeFrame:
-    def __init__(self: object, columns: object, rows: object) -> None:
+    def __init__(self: Self, columns: object, rows: object) -> None:
         self.columns = list(columns)
         self.rows = rows
         self.shape = (len(rows), len(columns))
 
-    def __getitem__(self: object, key: object) -> object:
+    def __getitem__(self: Self, key: object) -> object:
         idx = self.columns.index(key)
         return [row[idx] for row in self.rows]
 
-    def drop(self: object, columns: object) -> object:
+    def drop(self: Self, columns: object) -> object:
         """Run drop.
 
         Parameters
@@ -40,7 +42,7 @@ class _FakeFrame:
         new_rows = [[row[i] for i in idxs] for row in self.rows]
         return _FakeFrame(keep, new_rows)
 
-    def select_dtypes(self: object, include: object) -> object:
+    def select_dtypes(self: Self, include: object) -> object:
         """Run select dtypes.
 
         Parameters
@@ -55,7 +57,7 @@ class _FakeFrame:
         """
         return self
 
-    def fillna(self: object, value: object) -> object:
+    def fillna(self: Self, value: object) -> object:
         """Run fillna.
 
         Parameters
@@ -71,7 +73,7 @@ class _FakeFrame:
         return self
 
 
-def _install_fake_sklearn(monkeypatch: object) -> object:
+def _install_fake_sklearn(monkeypatch: pytest.MonkeyPatch) -> object:
     sklearn = types.ModuleType("sklearn")
     ensemble = types.ModuleType("sklearn.ensemble")
     linear_model = types.ModuleType("sklearn.linear_model")
@@ -81,11 +83,11 @@ def _install_fake_sklearn(monkeypatch: object) -> object:
     class FakeRF:
         """Test suite."""
 
-        def __init__(self: object, **kwargs: object) -> None:
+        def __init__(self: Self, **kwargs: object) -> None:
             self.kwargs = kwargs
             self.fitted = False
 
-        def fit(self: object, X: object, y: object) -> object:
+        def fit(self: Self, X: object, y: object) -> object:
             """Run fit.
 
             Parameters
@@ -105,24 +107,24 @@ def _install_fake_sklearn(monkeypatch: object) -> object:
     class FakeLogReg:
         """Test suite."""
 
-        def __init__(self: object, max_iter: object) -> None:
+        def __init__(self: Self, max_iter: object) -> None:
             self.max_iter = max_iter
 
     class FakeScaler:
         """Test suite."""
 
-        def __init__(self: object, with_mean: object, with_std: object) -> None:
+        def __init__(self: Self, with_mean: object, with_std: object) -> None:
             self.with_mean = with_mean
             self.with_std = with_std
 
     class FakePipeline:
         """Test suite."""
 
-        def __init__(self: object, steps: object) -> None:
+        def __init__(self: Self, steps: object) -> None:
             self.steps = steps
             self.fitted = False
 
-        def fit(self: object, X: object, y: object) -> object:
+        def fit(self: Self, X: object, y: object) -> object:
             """Run fit.
 
             Parameters
@@ -155,7 +157,7 @@ class TestTrainHelpers:
     """Test suite."""
 
     def test_find_train_file_prefers_explicit(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate find train file prefers explicit.
 
@@ -174,7 +176,7 @@ class TestTrainHelpers:
         assert training.find_training_data_file(settings) == "/tmp/explicit.csv"
 
     def test_find_train_file_prefers_parquet_then_csv(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate find train file prefers parquet then csv.
 
@@ -215,7 +217,7 @@ class TestTrainHelpers:
         assert training.find_training_data_file(settings).endswith(".parquet")
 
     def test_find_train_file_raises_when_missing(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate find train file raises when missing.
 
@@ -235,7 +237,9 @@ class TestTrainHelpers:
         with pytest.raises(FileNotFoundError, match="No training file found"):
             training.find_training_data_file(settings)
 
-    def test_load_table_uses_pandas_reader(self: object, monkeypatch: object) -> None:
+    def test_load_table_uses_pandas_reader(
+        self: Self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Validate load table uses pandas reader.
 
         Parameters
@@ -257,7 +261,7 @@ class TestTrainHelpers:
         assert training.load_training_table("x.csv")["kind"] == "csv"
 
     def test_fit_sklearn_raises_when_target_missing(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate fit sklearn raises when target missing.
 
@@ -277,7 +281,7 @@ class TestTrainHelpers:
         with pytest.raises(ValueError, match="TRAIN_TARGET"):
             training.fit_sklearn_model(settings, df)
 
-    def test_fit_sklearn_rf_branch(self: object, monkeypatch: object) -> None:
+    def test_fit_sklearn_rf_branch(self: Self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Validate fit sklearn rf branch.
 
         Parameters
@@ -299,7 +303,9 @@ class TestTrainHelpers:
         assert n_features == 2
         assert getattr(model, "fitted", False) is True
 
-    def test_fit_sklearn_logreg_branch(self: object, monkeypatch: object) -> None:
+    def test_fit_sklearn_logreg_branch(
+        self: Self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Validate fit sklearn logreg branch.
 
         Parameters
@@ -321,7 +327,9 @@ class TestTrainHelpers:
         assert n_features == 2
         assert getattr(model, "fitted", False) is True
 
-    def test_fit_sklearn_feature_mismatch(self: object, monkeypatch: object) -> None:
+    def test_fit_sklearn_feature_mismatch(
+        self: Self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Validate fit sklearn feature mismatch.
 
         Parameters
@@ -343,7 +351,7 @@ class TestTrainHelpers:
             training.fit_sklearn_model(settings, df)
 
     def test_save_sklearn_writes_joblib(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate save sklearn writes joblib.
 
@@ -372,7 +380,7 @@ class TestTrainHelpers:
         assert dumped["path"] == os.path.join(str(tmp_path), "model.joblib")
 
     def test_export_onnx_writes_file(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate export onnx writes file.
 
@@ -390,7 +398,7 @@ class TestTrainHelpers:
         """
 
         class _FakeOnx:
-            def SerializeToString(self: object) -> object:
+            def SerializeToString(self: Self) -> object:
                 """Run SerializeToString.
 
                 Returns
@@ -417,7 +425,7 @@ class TestTrainMain:
     """Test suite."""
 
     def test_main_rejects_unsupported_model_type(
-        self: object, monkeypatch: object
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate main rejects unsupported model type.
 
@@ -436,7 +444,7 @@ class TestTrainMain:
             training.main()
 
     def test_main_runs_happy_path_without_export(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate main runs happy path without export.
 
@@ -480,7 +488,7 @@ class TestTrainMain:
         assert not any(c[0] == "export" for c in calls)
 
     def test_main_runs_with_export(
-        self: object, monkeypatch: object, tmp_path: object
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate main runs with export.
 

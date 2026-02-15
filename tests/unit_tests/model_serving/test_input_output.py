@@ -1,6 +1,7 @@
 """Tests for input output."""
 
 import json
+from typing import Self
 
 import numpy as np
 import pytest
@@ -14,7 +15,7 @@ pytestmark = pytest.mark.unit
 class TestParsePayload:
     """Test suite for TestParsePayload."""
 
-    def test_csv_parse_basic(self: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_csv_parse_basic(self: Self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify csv parse basic.
 
         Parameters
@@ -33,7 +34,7 @@ class TestParsePayload:
         assert parsed.X.shape == (2, 3)
         assert parsed.tensors is None
 
-    def test_json_parse_instances(self: object) -> None:
+    def test_json_parse_instances(self: Self) -> None:
         """Verify json parse instances.
 
         Returns
@@ -48,7 +49,7 @@ class TestParsePayload:
         assert parsed.X.shape == (2, 2)
 
     def test_jsonl_parse_features_key(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify jsonl parse features key.
 
@@ -71,9 +72,7 @@ class TestParsePayload:
         )
         assert parsed.X.shape == (2, 3)
 
-    def test_strict_feature_count(
-        self: object, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_strict_feature_count(self: Self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify strict feature count.
 
         Parameters
@@ -92,7 +91,7 @@ class TestParsePayload:
             parse_payload(b"1,2\n3,4\n", "text/csv", settings)
 
     def test_split_id_and_feature_columns(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify split id and feature columns.
 
@@ -113,7 +112,7 @@ class TestParsePayload:
         assert parsed.X.tolist() == [[1.0, 2.0], [3.0, 4.0]]
         assert parsed.meta == {"ids": [[9.0], [8.0]], "id_columns": [0]}
 
-    def test_rejects_unsupported_content_type(self: object) -> None:
+    def test_rejects_unsupported_content_type(self: Self) -> None:
         """Verify rejects unsupported content type.
 
         Returns
@@ -126,7 +125,7 @@ class TestParsePayload:
             parse_payload(b"<x/>", "application/xml", settings)
 
     def test_rejects_non_tabular_mode(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify rejects non tabular mode.
 
@@ -146,7 +145,7 @@ class TestParsePayload:
             parse_payload(b"1,2", "text/csv", settings)
 
     def test_onnx_multi_input_builds_tensors(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify onnx multi input builds tensors.
 
@@ -183,7 +182,7 @@ class TestParsePayload:
         assert parsed.tensors["attention_mask"].shape[0] == 2
 
     def test_onnx_multi_input_dtype_by_onnx_name(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify onnx multi input dtype by onnx name.
 
@@ -206,7 +205,7 @@ class TestParsePayload:
         assert parsed.tensors["input_ids"].dtype == np.int64
 
     def test_onnx_multi_input_requires_record_keys(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify onnx multi input requires record keys.
 
@@ -229,7 +228,7 @@ class TestParsePayload:
             parse_payload(payload, "application/json", settings)
 
     def test_onnx_multi_input_requires_object_records(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate onnx multi input requires object records.
 
@@ -253,7 +252,7 @@ class TestParsePayload:
 class TestFormatOutput:
     """Test suite for TestFormatOutput."""
 
-    def test_dict_forces_json(self: object) -> None:
+    def test_dict_forces_json(self: Self) -> None:
         """Verify dict forces json.
 
         Returns
@@ -268,7 +267,7 @@ class TestFormatOutput:
         assert content_type == "application/json"
         assert json.loads(body) == {"a": [1]}
 
-    def test_csv_from_vector(self: object) -> None:
+    def test_csv_from_vector(self: Self) -> None:
         """Verify csv from vector.
 
         Returns
@@ -283,7 +282,7 @@ class TestFormatOutput:
         assert content_type == "text/csv"
         assert body == "1\n2\n3"
 
-    def test_csv_from_matrix(self: object) -> None:
+    def test_csv_from_matrix(self: Self) -> None:
         """Verify csv from matrix.
 
         Returns
@@ -299,7 +298,7 @@ class TestFormatOutput:
         assert body == "1,2\n3,4"
 
     def test_wrapped_json_when_predictions_only_false(
-        self: object, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Validate wrapped json when predictions only false.
 

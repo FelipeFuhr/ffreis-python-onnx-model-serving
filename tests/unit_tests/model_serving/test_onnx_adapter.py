@@ -1,6 +1,7 @@
 """Tests for onnx adapter."""
 
 from pathlib import Path
+from typing import Self
 
 import numpy as np
 import pytest
@@ -42,7 +43,7 @@ class TestOnnxAdapter:
     """Test suite for TestOnnxAdapter."""
 
     def test_raises_when_model_is_missing(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate raises when model is missing.
 
@@ -64,7 +65,7 @@ class TestOnnxAdapter:
             OnnxAdapter(Settings())
 
     def test_predicts_from_tabular_input(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate predicts from tabular input.
 
@@ -90,7 +91,7 @@ class TestOnnxAdapter:
         assert preds == [[6.0], [15.0]]
 
     def test_predicts_from_tensor_inputs_with_output_map(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate predicts from tensor inputs with output map.
 
@@ -122,7 +123,7 @@ class TestOnnxAdapter:
         }
 
     def test_selects_named_output(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verify selects named output.
 
@@ -149,7 +150,7 @@ class TestOnnxAdapter:
         assert preds == [[2.0, 4.0]]
 
     def test_selects_output_by_index(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate selects output by index.
 
@@ -176,7 +177,7 @@ class TestOnnxAdapter:
         assert preds == [[2.0, 4.0]]
 
     def test_rejects_empty_input(
-        self: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Verify rejects empty input.
 

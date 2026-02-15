@@ -1,6 +1,7 @@
 """Test module."""
 
 import types
+from typing import Self
 
 import pytest
 
@@ -15,10 +16,10 @@ pytestmark = pytest.mark.unit
 
 
 class _Recorder:
-    def __init__(self: object) -> None:
+    def __init__(self: Self) -> None:
         self.calls = []
 
-    def add(self: object, *args: object, **kwargs: object) -> object:
+    def add(self: Self, *args: object, **kwargs: object) -> object:
         """Run add.
 
         Parameters
@@ -48,7 +49,9 @@ def test_parse_headers_handles_empty_and_pairs() -> None:
     assert _parse_headers("a=b, c=d ,bad, x=1=2") == {"a": "b", "c": "d", "x": "1=2"}
 
 
-def test_setup_telemetry_returns_false_when_disabled(monkeypatch: object) -> None:
+def test_setup_telemetry_returns_false_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Validate setup telemetry returns false when disabled.
 
     Parameters
@@ -66,7 +69,7 @@ def test_setup_telemetry_returns_false_when_disabled(monkeypatch: object) -> Non
 
 
 def test_setup_telemetry_returns_false_when_dependencies_missing(
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Validate setup telemetry returns false when dependencies missing.
 
@@ -88,7 +91,9 @@ def test_setup_telemetry_returns_false_when_dependencies_missing(
     assert setup_telemetry(Settings()) is False
 
 
-def test_setup_telemetry_returns_false_without_endpoint(monkeypatch: object) -> None:
+def test_setup_telemetry_returns_false_without_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Validate setup telemetry returns false without endpoint.
 
     Parameters
@@ -113,7 +118,7 @@ def test_setup_telemetry_returns_false_without_endpoint(monkeypatch: object) -> 
     assert setup_telemetry(Settings()) is False
 
 
-def test_setup_telemetry_happy_path(monkeypatch: object) -> None:
+def test_setup_telemetry_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """Validate setup telemetry happy path.
 
     Parameters
@@ -142,10 +147,10 @@ def test_setup_telemetry_happy_path(monkeypatch: object) -> None:
     class FakeProvider:
         """Test suite."""
 
-        def __init__(self: object, resource: object) -> None:
+        def __init__(self: Self, resource: object) -> None:
             provider_rec.add(resource=resource)
 
-        def add_span_processor(self: object, processor: object) -> object:
+        def add_span_processor(self: Self, processor: object) -> object:
             """Run add span processor.
 
             Parameters
@@ -184,7 +189,7 @@ def test_setup_telemetry_happy_path(monkeypatch: object) -> None:
         """Test suite."""
 
         def __init__(
-            self: object, endpoint: object, headers: object, timeout: object
+            self: Self, endpoint: object, headers: object, timeout: object
         ) -> None:
             self.endpoint = endpoint
             self.headers = headers
@@ -193,7 +198,7 @@ def test_setup_telemetry_happy_path(monkeypatch: object) -> None:
     class FakeBatch:
         """Test suite."""
 
-        def __init__(self: object, exporter: object) -> None:
+        def __init__(self: Self, exporter: object) -> None:
             self.exporter = exporter
 
     monkeypatch.setattr(
@@ -231,7 +236,7 @@ def test_setup_telemetry_happy_path(monkeypatch: object) -> None:
     assert log_rec.calls
 
 
-def test_instrument_fastapi_when_enabled(monkeypatch: object) -> None:
+def test_instrument_fastapi_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Validate instrument fastapi when enabled.
 
     Parameters
@@ -260,7 +265,7 @@ def test_instrument_fastapi_when_enabled(monkeypatch: object) -> None:
     assert rec.calls
 
 
-def test_instrument_fastapi_noop_when_disabled(monkeypatch: object) -> None:
+def test_instrument_fastapi_noop_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Validate instrument fastapi noop when disabled.
 
     Parameters
