@@ -1,5 +1,6 @@
 ARG BUILDER_IMAGE=ffreis/builder
 FROM ffreis/base-runner
+ARG BUILDER_IMAGE
 
 USER root
 
