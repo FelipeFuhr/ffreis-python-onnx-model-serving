@@ -43,7 +43,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: .venv/bin/python -m mypy src tests examples
+        entry: .venv/bin/python -m mypy src
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]

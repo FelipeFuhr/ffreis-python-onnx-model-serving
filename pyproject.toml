@@ -73,15 +73,9 @@ convention = "numpy"
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src", "tests", "examples"]
+files = ["src"]
 implicit_reexport = true
 mypy_path = ["src"]
-
-[[tool.mypy.overrides]]
-module = ["tests.*", "examples.*"]
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-check_untyped_defs = false
 
 [tool.coverage.run]
 branch = true

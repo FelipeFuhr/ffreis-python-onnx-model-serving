@@ -3,24 +3,8 @@ name: Commit Checks (pre-commit)
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "main.py"
-      - "pyproject.toml"
-      - "requirements.txt"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/commit-checks.yml"
   push:
     branches: [ main ]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "main.py"
-      - "pyproject.toml"
-      - "requirements.txt"
-      - ".pre-commit-config.yaml"
-      - ".github/workflows/commit-checks.yml"
 
 permissions:
   contents: read
