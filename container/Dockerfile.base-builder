@@ -8,6 +8,7 @@ RUN apt-get update && \
       python3-pip \
       python3-venv \
       ca-certificates && \
+    python3 -m pip install --no-cache-dir --upgrade pip uv && \
     install -d -m 0750 -o appuser -g appgroup /opt/venv && \
     rm -rf /var/lib/apt/lists/*
 

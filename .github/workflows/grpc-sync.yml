@@ -1,0 +1,35 @@
+name: gRPC Sync
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  grpc-sync-and-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,grpc]"
+
+      - name: Check generated gRPC stubs are current
+        run: |
+          set -euo pipefail
+          ./scripts/check_grpc_stubs.sh
+
+      - name: Run gRPC/API parity test
+        run: |
+          set -euo pipefail
+          pytest -q tests/integration_tests/test_grpc_parity.py

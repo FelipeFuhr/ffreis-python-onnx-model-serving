@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package onnxserving.grpc;
+
+service InferenceService {
+  rpc Live(LiveRequest) returns (StatusReply);
+  rpc Ready(ReadyRequest) returns (StatusReply);
+  rpc Predict(PredictRequest) returns (PredictReply);
+}
+
+message LiveRequest {}
+
+message ReadyRequest {}
+
+message StatusReply {
+  bool ok = 1;
+  string status = 2;
+}
+
+message PredictRequest {
+  bytes payload = 1;
+  string content_type = 2;
+  string accept = 3;
+}
+
+message PredictReply {
+  bytes body = 1;
+  string content_type = 2;
+  map<string, string> metadata = 3;
+}

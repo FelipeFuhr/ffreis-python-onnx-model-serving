@@ -194,6 +194,11 @@ class InferenceApplicationBuilder:
             """
             return self._build_liveness_response()
 
+        @self.application.get("/healthz")
+        def healthz() -> PlainTextResponse:
+            """Return process liveness status (Kubernetes-style endpoint)."""
+            return self._build_liveness_response()
+
         @self.application.get("/ready")
         def ready() -> PlainTextResponse:
             """Return model readiness status.
@@ -203,6 +208,11 @@ class InferenceApplicationBuilder:
             fastapi.responses.PlainTextResponse
                 HTTP 200 when model is ready, otherwise HTTP 500.
             """
+            return self._build_readiness_response()
+
+        @self.application.get("/readyz")
+        def readyz() -> PlainTextResponse:
+            """Return model readiness status (Kubernetes-style endpoint)."""
             return self._build_readiness_response()
 
         @self.application.get("/ping")

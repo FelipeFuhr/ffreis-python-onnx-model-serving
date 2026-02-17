@@ -8,7 +8,7 @@ A minimal guide to building Python applications with Docker using multi-stage bu
 
 This project demonstrates a **multi-stage Docker build** for Python that:
 
-1. **Stage 1 (Builder)**: Creates an isolated virtual environment, installs dependencies, runs tests, and generates a lock file for reproducibility
+1. **Stage 1 (Builder)**: Creates an isolated virtual environment, installs dependencies from `uv.lock`, and runs tests
 2. **Stage 2 (Runtime)**: Copies only the necessary application files plus the built virtual environment to a minimal image
 
 ## Quick Start
@@ -39,13 +39,14 @@ This project uses an **incremental multi-image approach** optimized for Python d
 
 1. **Base (`ffreis/base`)**: Lightweight Ubuntu 26.04 base image with unprivileged user
 2. **Base Builder (`ffreis/base-builder`)**: Adds Python and virtualenv tooling to the base
-3. **Builder (`ffreis/builder`)**: Builds `/opt/venv`, runs tests, generates requirements.lock for reproducibility
-4. **Base Runner (`ffreis/base-runner`)**: Minimal runtime base with entrypoint script
-5. **Runner (`ffreis/runner`)**: Contains application code, Python runtime, and copied `/opt/venv`
+3. **UV Venv (`ffreis/uv-venv`)**: Builds shared `/opt/venv` from `uv.lock`
+4. **Builder (`ffreis/builder`)**: Reuses `/opt/venv` and runs tests
+5. **Base Runner (`ffreis/base-runner`)**: Minimal runtime base with entrypoint script
+6. **Runner (`ffreis/runner`)**: Contains application code, Python runtime, and copied `/opt/venv`
 
 **Benefits:**
 
-- **Reproducible builds**: Lock file (`requirements.lock`) generated during build ensures consistent dependencies
+- **Reproducible builds**: `uv.lock` ensures consistent dependencies across environments
 - **Testing in build**: Tests run during the build process - build fails if tests fail
 - **Layer caching**: Rebuild only changed layers; base images rarely change
 - **Minimal final images**: Runtime excludes build tools, tests, and unnecessary files
@@ -59,7 +60,8 @@ This project uses an **incremental multi-image approach** optimized for Python d
 ```bash
 make build-base              # Build base Ubuntu image
 make build-base-builder      # Build base image with Python
-make build-builder           # Build builder (installs deps, runs tests, creates lock file)
+make build-uv-venv           # Build shared uv-based virtual environment image
+make build-builder           # Build builder (reuses uv-venv and runs tests)
 make build-base-runner       # Build minimal runner base
 make build-runner            # Build final runner image
 make build-images            # Build all images at once
@@ -99,7 +101,7 @@ make clean-all               # Remove all images
 .
 ├── main.py                 # Application entry point
 ├── pyproject.toml          # Python project configuration & dependencies
-├── requirements.txt        # Optional pinned dependencies
+├── uv.lock                 # Locked dependency graph used by uv
 ├── src/
 │   └── onnx_model_serving/
 │       ├── __init__.py
@@ -112,7 +114,8 @@ make clean-all               # Remove all images
 │   ├── digests.env       # Base image digest pinning
 │   ├── Dockerfile.base
 │   ├── Dockerfile.base-builder
-│   ├── Dockerfile.builder  # Installs deps, runs tests, creates lock
+│   ├── Dockerfile.uv-builder # Builds /opt/venv from uv.lock
+│   ├── Dockerfile.builder  # Installs deps from uv.lock and runs tests
 │   ├── Dockerfile.base-runner
 │   └── Dockerfile.runner
 ├── scripts/              # Helper scripts
@@ -145,7 +148,7 @@ make clean-all               # Remove all images
    - `make run`
 3. **Build images**: Run `make build-images` to build and test in containers
 4. **Tests run automatically**: Builder stage runs `pytest` - build fails if tests fail
-5. **Lock file generated**: `requirements.lock` is created for reproducible deployments
+5. **Locked install enforced**: `uv.lock` is used with `--frozen` for reproducible deployments
 6. **Deploy**: Use `ffreis/runner` image in production - it's minimal and secure
 
 ## Testing
@@ -194,7 +197,7 @@ uv run --extra examples python -m examples.train_and_serve_neural_network
 
 ### Example Containers
 
-Dedicated example Dockerfiles are available in `container/`:
+Dedicated example Dockerfiles are available in `container/examples/`:
 
 - `Dockerfile.example-base`
 - `Dockerfile.example-logistic-regression`
@@ -204,8 +207,8 @@ Dedicated example Dockerfiles are available in `container/`:
 Build and run:
 
 ```bash
-docker build -f container/Dockerfile.example-base -t example-base .
-docker build -f container/Dockerfile.example-neural-network -t example-neural-network .
+docker build -f container/examples/Dockerfile.example-base -t example-base .
+docker build -f container/examples/Dockerfile.example-neural-network -t example-neural-network .
 docker run --rm example-neural-network
 ```
 
