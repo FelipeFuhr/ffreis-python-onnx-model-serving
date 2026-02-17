@@ -141,6 +141,10 @@ grpc-generate: ## Regenerate protobuf/gRPC stubs
 grpc-check: ## Verify protobuf/gRPC stubs are up to date
 	./scripts/check_grpc_stubs.sh
 
+.PHONY: grpc-clean
+grpc-clean: ## Remove generated protobuf/gRPC stubs
+	rm -f src/onnx_serving_grpc/inference_pb2.py src/onnx_serving_grpc/inference_pb2_grpc.py
+
 .PHONY: run-app
 run-app: ## Run the runner container
 	$(CONTAINER_COMMAND) run $(RUNNER_IMAGE)

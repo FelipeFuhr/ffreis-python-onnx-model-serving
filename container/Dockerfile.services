@@ -14,10 +14,13 @@ WORKDIR /app
 COPY --from=uv /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock main.py /app/
+COPY proto /app/proto
+COPY scripts /app/scripts
 COPY src /app/src
 COPY examples /app/examples
 
 RUN uv venv "${VIRTUAL_ENV}" --python 3.13 \
+    && ./scripts/generate_grpc_stubs.sh \
     && uv sync --active --frozen --extra dev --extra grpc
 
 CMD ["python", "-m", "onnx_model_serving.grpc.server", "--host", "0.0.0.0", "--port", "50052"]

@@ -11,12 +11,12 @@ import pytest
 
 from application import create_application
 from config import Settings
-from onnx_model_serving.grpc.server import InferenceGrpcService
 from parsed_types import ParsedInput
 
 try:
     import grpc
 
+    from onnx_model_serving.grpc.server import InferenceGrpcService
     from onnx_serving_grpc import inference_pb2
 except ModuleNotFoundError as exc:
     pytest.skip(f"grpc parity dependencies unavailable: {exc}", allow_module_level=True)
