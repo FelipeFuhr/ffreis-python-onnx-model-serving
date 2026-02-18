@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import importlib
 import logging
-from concurrent import futures
 from dataclasses import dataclass, field
 from types import ModuleType
 from typing import Protocol, cast
@@ -15,7 +15,7 @@ import grpc
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
 from input_output import format_output, parse_payload
-from parsed_types import ParsedInput
+from parsed_types import batch_size as _batch_size
 
 log = logging.getLogger("byoc.grpc")
 
@@ -94,34 +94,15 @@ class _PredictRequestLike(Protocol):
 
 
 def _set_grpc_error(
-    context: grpc.ServicerContext | None, code: grpc.StatusCode, details: str
+    context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
+    code: grpc.StatusCode,
+    details: str,
 ) -> None:
     """Safely set error code/details when context is available."""
     if context is None:
         return
     context.set_code(code)
     context.set_details(details)
-
-
-def _batch_size(parsed: ParsedInput) -> int:
-    """Extract batch size from parsed payload.
-
-    Parameters
-    ----------
-    parsed : ParsedInput
-        Parsed request payload.
-
-    Returns
-    -------
-    int
-        Inferred batch size.
-    """
-    if parsed.X is not None:
-        return int(parsed.X.shape[0])
-    if parsed.tensors:
-        first = next(iter(parsed.tensors.values()))
-        return int(first.shape[0]) if getattr(first, "ndim", 0) > 0 else 1
-    raise ValueError("Parsed input contained no features/tensors")
 
 
 class InferenceGrpcService:
@@ -138,19 +119,19 @@ class InferenceGrpcService:
         self.settings = settings
         self.adapter: BaseAdapter = load_adapter(settings)
 
-    def Live(  # noqa: N802
+    async def live(
         self: InferenceGrpcService,
         request: object,
-        context: grpc.ServicerContext,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext,
     ) -> object:
         """Report process liveness."""
         _ = (request, context)
         return _status_reply(ok=True, status="live")
 
-    def Ready(  # noqa: N802
+    async def ready(
         self: InferenceGrpcService,
         request: object,
-        context: grpc.ServicerContext,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext,
     ) -> object:
         """Report model readiness."""
         _ = (request, context)
@@ -160,10 +141,10 @@ class InferenceGrpcService:
             status="ready" if is_ready else "not_ready",
         )
 
-    def Predict(  # noqa: N802
+    async def predict(
         self: InferenceGrpcService,
         request: object,
-        context: grpc.ServicerContext | None,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
     ) -> object:
         """Run model prediction for a payload."""
         predict_request = cast(_PredictRequestLike, request)
@@ -204,6 +185,11 @@ class InferenceGrpcService:
             _set_grpc_error(context, grpc.StatusCode.INTERNAL, str(exc))
             return _predict_reply()
 
+    # gRPC generated service wiring expects these exact method names.
+    Live = live
+    Ready = ready
+    Predict = predict
+
 
 def create_server(
     settings: Settings,
@@ -211,7 +197,7 @@ def create_server(
     host: str,
     port: int,
     max_workers: int = 16,
-) -> grpc.Server:
+) -> grpc.aio.Server:
     """Create configured gRPC server instance.
 
     Parameters
@@ -223,14 +209,14 @@ def create_server(
     port : int
         Bind TCP port.
     max_workers : int, default=16
-        Worker thread pool size.
+        Maximum concurrent RPCs.
 
     Returns
     -------
-    grpc.Server
+    grpc.aio.Server
         Configured server.
     """
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+    server = grpc.aio.server(maximum_concurrent_rpcs=max_workers)
     grpc_stubs = _require_grpc_stubs_module()
     grpc_stubs.add_InferenceServiceServicer_to_server(
         InferenceGrpcService(settings),
@@ -238,6 +224,25 @@ def create_server(
     )
     server.add_insecure_port(f"{host}:{port}")
     return server
+
+
+async def _serve(
+    *,
+    settings: Settings,
+    host: str,
+    port: int,
+    max_workers: int,
+) -> None:
+    """Start async gRPC server and block until termination."""
+    server = create_server(
+        settings,
+        host=host,
+        port=port,
+        max_workers=max_workers,
+    )
+    await server.start()
+    log.info("gRPC inference server listening on %s:%s", host, port)
+    await server.wait_for_termination()
 
 
 def main() -> None:
@@ -249,20 +254,19 @@ def main() -> None:
     )
 
     parser = argparse.ArgumentParser(description="ONNX model serving gRPC endpoint.")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=50052)
     parser.add_argument("--max-workers", type=int, default=16)
     args = parser.parse_args()
 
-    server = create_server(
-        settings,
-        host=cast(str, args.host),
-        port=cast(int, args.port),
-        max_workers=cast(int, args.max_workers),
+    asyncio.run(
+        _serve(
+            settings=settings,
+            host=cast(str, args.host),
+            port=cast(int, args.port),
+            max_workers=cast(int, args.max_workers),
+        )
     )
-    server.start()
-    log.info("gRPC inference server listening on %s:%s", args.host, args.port)
-    server.wait_for_termination()
 
 
 if __name__ == "__main__":

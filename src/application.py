@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
-from typing import Literal, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -17,7 +17,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
 from input_output import format_output, parse_payload
+from openapi_contract import load_openapi_contract
 from parsed_types import ParsedInput
+from parsed_types import batch_size as _batch_size
 from telemetry import (
     get_current_trace_identifiers,
     get_tracer,
@@ -88,27 +90,6 @@ class _NoopTracer:
 tracer: _TracerLike = cast(_TracerLike, get_tracer("byoc") or _NoopTracer())
 
 
-def _batch_size(parsed: ParsedInput) -> int:
-    """Extract batch size from parsed input object.
-
-    Parameters
-    ----------
-    parsed : ParsedInput
-        Parsed input data.
-
-    Returns
-    -------
-    int
-        Batch size.
-    """
-    if parsed.X is not None:
-        return int(parsed.X.shape[0])
-    if parsed.tensors:
-        first = next(iter(parsed.tensors.values()))
-        return int(first.shape[0]) if getattr(first, "ndim", 0) > 0 else 1
-    raise ValueError("Parsed input contained no features/tensors")
-
-
 class InferenceApplicationBuilder:
     """Compose and configure FastAPI inference application."""
 
@@ -133,7 +114,24 @@ class InferenceApplicationBuilder:
         self._configure_metrics()
         self._register_body_limit_middleware()
         self._register_routes()
+        self._bind_openapi_contract()
         return self.application
+
+    def _bind_openapi_contract(self: InferenceApplicationBuilder) -> None:
+        """Serve checked-in OpenAPI contract when available.
+
+        Falls back to FastAPI's generated schema when contract file is missing.
+        """
+        generated_openapi = self.application.openapi
+
+        def _openapi() -> dict[str, object]:
+            contract = load_openapi_contract()
+            if contract is not None:
+                return contract
+            return cast(dict[str, object], generated_openapi())
+
+        application_any = cast(Any, self.application)
+        application_any.openapi = _openapi
 
     def _configure_telemetry(self: InferenceApplicationBuilder) -> None:
         """Enable application telemetry when configured."""

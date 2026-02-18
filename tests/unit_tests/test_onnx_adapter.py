@@ -6,14 +6,15 @@ from typing import Self
 import numpy as np
 import pytest
 
+from config import Settings
+from onnx_adapter import OnnxAdapter
+from parsed_types import ParsedInput
+
 onnx = pytest.importorskip("onnx")
 pytest.importorskip("onnxruntime")
 
-from onnx import TensorProto, helper  # noqa: E402
-
-from config import Settings  # noqa: E402
-from onnx_adapter import OnnxAdapter  # noqa: E402
-from parsed_types import ParsedInput  # noqa: E402
+TensorProto = onnx.TensorProto
+helper = onnx.helper
 
 pytestmark = pytest.mark.unit
 

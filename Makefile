@@ -11,19 +11,25 @@ VENV ?= .venv
 CONTAINER_COMMAND ?= podman
 
 PREFIX ?= ffreis
+IMAGE_PROVIDER ?=
+IMAGE_TAG ?= api-grpc-smoke
+SMOKE_TIMEOUT ?= 20m
 BASE_DIR ?= .
 CONTAINER_DIR ?= container
+
+IMAGE_PREFIX := $(if $(IMAGE_PROVIDER),$(IMAGE_PROVIDER)/,)$(PREFIX)
+IMAGE_ROOT := $(IMAGE_PREFIX)
 
 # ------------------------------------------------------------------------------
 # Image names
 # ------------------------------------------------------------------------------
 
-BASE_IMAGE := $(PREFIX)/base
-BASE_BUILDER_IMAGE := $(PREFIX)/base-builder
-UV_VENV_IMAGE := $(PREFIX)/uv-venv
-BUILDER_IMAGE := $(PREFIX)/builder
-BASE_RUNNER_IMAGE := $(PREFIX)/base-runner
-RUNNER_IMAGE := $(PREFIX)/runner
+BASE_IMAGE := $(IMAGE_PREFIX)/base
+BASE_BUILDER_IMAGE := $(IMAGE_PREFIX)/base-builder
+UV_VENV_IMAGE := $(IMAGE_PREFIX)/uv-venv
+BUILDER_IMAGE := $(IMAGE_PREFIX)/builder
+BASE_RUNNER_IMAGE := $(IMAGE_PREFIX)/base-runner
+RUNNER_IMAGE := $(IMAGE_PREFIX)/runner
 
 # ------------------------------------------------------------------------------
 # Derived values
@@ -93,24 +99,29 @@ build-base: ## Build base image (pinned by digest env)
 
 .PHONY: build-base-builder
 build-base-builder: build-base ## Build base-builder image
-	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-builder -t $(BASE_BUILDER_IMAGE) $(BASE_DIR)
+	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-builder -t $(BASE_BUILDER_IMAGE) $(BASE_DIR) \
+		--build-arg BASE_IMAGE="$(BASE_IMAGE)"
 
 .PHONY: build-uv-venv
 build-uv-venv: build-base build-base-builder ## Build shared uv-based venv image from uv.lock
-	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.uv-builder -t $(UV_VENV_IMAGE) $(BASE_DIR)
+	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.uv-builder -t $(UV_VENV_IMAGE) $(BASE_DIR) \
+		--build-arg BASE_BUILDER_IMAGE="$(BASE_BUILDER_IMAGE)"
 
 .PHONY: build-builder
 build-builder: build-uv-venv ## Build builder image (reuses venv image and runs tests)
 	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.builder -t $(BUILDER_IMAGE) $(BASE_DIR) \
+		--build-arg BASE_BUILDER_IMAGE="$(BASE_BUILDER_IMAGE)" \
 		--build-arg UV_VENV_IMAGE="$(UV_VENV_IMAGE)"
 
 .PHONY: build-base-runner
 build-base-runner: build-base ## Build base-runner image
-	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-runner -t $(BASE_RUNNER_IMAGE) $(BASE_DIR)
+	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.base-runner -t $(BASE_RUNNER_IMAGE) $(BASE_DIR) \
+		--build-arg BASE_IMAGE="$(BASE_IMAGE)"
 
 .PHONY: build-runner
 build-runner: build-base-runner build-builder ## Build runner image (minimal Python runtime)
 	$(CONTAINER_COMMAND) build -f $(CONTAINER_DIR)/Dockerfile.runner -t $(RUNNER_IMAGE) $(BASE_DIR) \
+		--build-arg BASE_RUNNER_IMAGE="$(BASE_RUNNER_IMAGE)" \
 		--build-arg BUILDER_IMAGE="$(BUILDER_IMAGE)" \
 		--build-arg UV_VENV_IMAGE="$(UV_VENV_IMAGE)"
 
@@ -126,7 +137,11 @@ build: build-images ## Build all container images
 
 .PHONY: env
 env: ## Create local virtual environment
-	uv venv $(VENV)
+	@if [ -d "$(VENV)" ]; then \
+		echo "Virtual environment already exists at $(VENV)"; \
+	else \
+		uv venv $(VENV); \
+	fi
 	@echo "Activate with: . $(VENV)/bin/activate"
 
 .PHONY: build-local
@@ -140,6 +155,10 @@ grpc-generate: ## Regenerate protobuf/gRPC stubs
 .PHONY: grpc-check
 grpc-check: ## Verify protobuf/gRPC stubs are up to date
 	./scripts/check_grpc_stubs.sh
+
+.PHONY: openapi-check
+openapi-check: ## Validate OpenAPI contract and verify runtime drift
+	PYTHONPATH=src env -u VIRTUAL_ENV uv run --project . --with openapi-spec-validator --with pyyaml python scripts/check_openapi.py
 
 .PHONY: grpc-clean
 grpc-clean: ## Remove generated protobuf/gRPC stubs
@@ -201,7 +220,12 @@ test-grpc-parity: ## Run gRPC/API parity tests
 
 .PHONY: smoke-api-grpc
 smoke-api-grpc: ## Run docker-compose HTTP + gRPC smoke test
-	docker compose -f examples/docker-compose.api-grpc.yml up --build --abort-on-container-exit --exit-code-from smoke
+	@set -euo pipefail; \
+	cleanup() { \
+		IMAGE_ROOT="$(IMAGE_ROOT)" IMAGE_TAG="$(IMAGE_TAG)" docker compose -f examples/docker-compose.api-grpc.yml down --remove-orphans || true; \
+	}; \
+	trap cleanup EXIT; \
+	IMAGE_ROOT="$(IMAGE_ROOT)" IMAGE_TAG="$(IMAGE_TAG)" timeout --foreground "$(SMOKE_TIMEOUT)" docker compose -f examples/docker-compose.api-grpc.yml up --build --abort-on-container-exit --exit-code-from smoke
 
 # ------------------------------------------------------------------------------
 # Cleaning
@@ -239,4 +263,4 @@ clean-runner: ## Remove runner image
 clean-all: clean-repo clean-base clean-base-builder clean-uv-venv clean-builder clean-base-runner clean-runner ## Clean everything
 
 .PHONY: ci-grpc
-ci-grpc: grpc-check lint test-grpc-parity ## Run gRPC sync + parity quality gate
+ci-grpc: grpc-check openapi-check lint test-grpc-parity ## Run gRPC sync + parity quality gate

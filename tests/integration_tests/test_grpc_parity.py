@@ -201,9 +201,9 @@ async def test_http_and_grpc_predict_parity_across_batches(
             headers={"content-type": "application/json", "accept": "application/json"},
         )
 
-    grpc_live = grpc_service.Live(inference_pb2.LiveRequest(), None)
-    grpc_ready = grpc_service.Ready(inference_pb2.ReadyRequest(), None)
-    grpc_predict = grpc_service.Predict(
+    grpc_live = await grpc_service.Live(inference_pb2.LiveRequest(), None)
+    grpc_ready = await grpc_service.Ready(inference_pb2.ReadyRequest(), None)
+    grpc_predict = await grpc_service.Predict(
         inference_pb2.PredictRequest(
             payload=payload_bytes,
             content_type="application/json",
@@ -249,7 +249,7 @@ async def test_error_parity_for_invalid_json_input(
         )
 
     context = _RecordingContext()
-    grpc_reply = grpc_service.Predict(
+    grpc_reply = await grpc_service.Predict(
         inference_pb2.PredictRequest(
             payload=bad_payload,
             content_type="application/json",
@@ -287,7 +287,7 @@ async def test_error_parity_for_record_limit_exceeded(
         )
 
     context = _RecordingContext()
-    grpc_service.Predict(
+    await grpc_service.Predict(
         inference_pb2.PredictRequest(
             payload=payload_bytes,
             content_type="application/json",
@@ -338,7 +338,7 @@ async def test_http_and_grpc_predict_parity_for_multiple_content_types(
             headers={"content-type": content_type, "accept": accept},
         )
 
-    grpc_predict = grpc_service.Predict(
+    grpc_predict = await grpc_service.Predict(
         inference_pb2.PredictRequest(
             payload=payload,
             content_type=content_type,

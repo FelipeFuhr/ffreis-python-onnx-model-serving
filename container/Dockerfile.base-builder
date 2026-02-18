@@ -1,6 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
 
-FROM ffreis/base
+ARG BASE_IMAGE=ffreis/base
+FROM ${BASE_IMAGE}
 
 USER root
 

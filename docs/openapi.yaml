@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: ONNX BYOC Inference API
+  version: 1.0.0
+  description: |
+    SageMaker BYOC-compatible inference contract for ONNX serving runtimes.
+
+    This OpenAPI document defines transport-level behavior (paths, payload media types,
+    headers, and response envelopes). Model-specific tensor semantics are defined in
+    a separate model manifest bundled with model artifacts.
+servers:
+  - url: http://localhost:8080
+    description: Local default
+
+tags:
+  - name: health
+  - name: inference
+
+paths:
+  /live:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      operationId: live
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+
+  /healthz:
+    get:
+      tags: [health]
+      summary: Kubernetes liveness alias
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+
+  /ready:
+    get:
+      tags: [health]
+      summary: Readiness probe
+      operationId: ready
+      responses:
+        '200':
+          description: Model is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+        '500':
+          description: Model is not ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+
+  /readyz:
+    get:
+      tags: [health]
+      summary: Kubernetes readiness alias
+      operationId: readyz
+      responses:
+        '200':
+          description: Model is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+        '500':
+          description: Model is not ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+
+  /ping:
+    get:
+      tags: [health]
+      summary: SageMaker readiness alias
+      operationId: ping
+      responses:
+        '200':
+          description: Model is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+        '500':
+          description: Model is not ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "\n"
+
+  /invocations:
+    post:
+      tags: [inference]
+      summary: Run ONNX inference
+      operationId: invocations
+      description: |
+        Runs model inference over request payload.
+
+        Media type determines decoder path. The runtime normalizes request payloads to
+        tensors before ONNX execution.
+      parameters:
+        - $ref: '#/components/parameters/AcceptHeader'
+        - $ref: '#/components/parameters/TensorDtypeHeader'
+        - $ref: '#/components/parameters/TensorShapeHeader'
+        - $ref: '#/components/parameters/TensorLayoutHeader'
+        - $ref: '#/components/parameters/AudioSampleRateHeader'
+        - $ref: '#/components/parameters/ImageColorModeHeader'
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+            examples:
+              small:
+                value: |
+                  1,2,3
+                  4,5,6
+          application/json:
+            schema:
+              oneOf:
+                - type: array
+                  items:
+                    oneOf:
+                      - type: number
+                      - type: array
+                        items:
+                          type: number
+                - type: object
+                  additionalProperties: true
+          application/x-parquet:
+            schema:
+              type: string
+              format: binary
+          application/vnd.apache.parquet:
+            schema:
+              type: string
+              format: binary
+          application/x-npz:
+            schema:
+              type: string
+              format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Inference output
+          headers:
+            Content-Type:
+              schema:
+                type: string
+            x-trace-id:
+              schema:
+                type: string
+            x-span-id:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/x-npz:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many concurrent requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal inference error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    AcceptHeader:
+      name: Accept
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Desired response media type.
+
+    TensorDtypeHeader:
+      name: x-tensor-dtype
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional dtype hint for binary tensor payloads.
+
+    TensorShapeHeader:
+      name: x-tensor-shape
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional shape hint for binary tensor payloads (e.g. "[2,3,224,224]").
+
+    TensorLayoutHeader:
+      name: x-tensor-layout
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional layout hint (e.g. NCHW/NHWC).
+
+    AudioSampleRateHeader:
+      name: x-audio-sample-rate
+      in: header
+      required: false
+      schema:
+        type: integer
+      description: Optional sample-rate hint for raw audio payloads.
+
+    ImageColorModeHeader:
+      name: x-image-color-mode
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional image mode hint (e.g. RGB/L/GRAY).
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+x-contract:
+  contract_type: byoc-inference-transport
+  model_manifest:
+    version: 1.0
+    location_hint: model.manifest.json
+    notes: Model-specific tensor semantics are defined outside OpenAPI.

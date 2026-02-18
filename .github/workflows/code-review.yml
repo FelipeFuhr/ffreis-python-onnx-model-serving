@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - "src/**"
+      - "docs/openapi.yaml"
+      - "scripts/check_openapi.py"
       - "tests/**"
       - "main.py"
       - "pyproject.toml"
@@ -15,6 +17,8 @@ on:
     branches: [ main ]
     paths:
       - "src/**"
+      - "docs/openapi.yaml"
+      - "scripts/check_openapi.py"
       - "tests/**"
       - "main.py"
       - "pyproject.toml"
@@ -48,5 +52,6 @@ jobs:
           set -euo pipefail
           make env
           make build-local
+          make openapi-check
           make lint
           make test

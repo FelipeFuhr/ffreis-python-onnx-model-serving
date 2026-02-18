@@ -26,3 +26,24 @@ class ParsedInput(BaseModel):
     X: np.ndarray | None = None
     tensors: dict[str, np.ndarray] | None = None
     meta: dict[str, Any] | None = None
+
+
+def batch_size(parsed: ParsedInput) -> int:
+    """Extract batch size from parsed input payload.
+
+    Parameters
+    ----------
+    parsed : ParsedInput
+        Parsed input object.
+
+    Returns
+    -------
+    int
+        Inferred batch size.
+    """
+    if parsed.X is not None:
+        return int(parsed.X.shape[0])
+    if parsed.tensors:
+        first = next(iter(parsed.tensors.values()))
+        return int(first.shape[0]) if getattr(first, "ndim", 0) > 0 else 1
+    raise ValueError("Parsed input contained no features/tensors")

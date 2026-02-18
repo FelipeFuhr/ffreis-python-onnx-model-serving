@@ -11,6 +11,14 @@ This project demonstrates a **multi-stage Docker build** for Python that:
 1. **Stage 1 (Builder)**: Creates an isolated virtual environment, installs dependencies from `uv.lock`, and runs tests
 2. **Stage 2 (Runtime)**: Copies only the necessary application files plus the built virtual environment to a minimal image
 
+## API Contract
+
+- OpenAPI transport contract: `docs/openapi.yaml`
+- gRPC contract: `proto/onnx_serving_grpc/inference.proto`
+
+OpenAPI documents transport behavior (paths, media types, headers, and response envelopes).
+Model-specific tensor semantics are expected to be defined by a model manifest shipped with artifacts.
+
 ## Quick Start
 
 ### Build all images
@@ -184,6 +192,52 @@ Each script performs a local demonstration flow:
 5. Validate prediction parity and shut the server down.
 
 The core serving package remains inference-only (`model.onnx` + `/invocations`).
+
+## Optional Native Framework Inference
+
+The API can also serve non-ONNX model artifacts on Python as optional paths.
+
+Install optional dependencies:
+
+```bash
+uv sync --extra sklearn
+uv sync --extra torch
+uv sync --extra tensorflow
+```
+
+Run with sklearn model artifact:
+
+```bash
+export SM_MODEL_DIR=/path/to/model-dir
+export MODEL_TYPE=sklearn
+export MODEL_FILENAME=model.joblib
+uv run --extra sklearn python -m uvicorn serving:application --host 0.0.0.0 --port 8080
+```
+
+Run with PyTorch model artifact:
+
+```bash
+export SM_MODEL_DIR=/path/to/model-dir
+export MODEL_TYPE=pytorch
+export MODEL_FILENAME=model.pt
+uv run --extra torch python -m uvicorn serving:application --host 0.0.0.0 --port 8080
+```
+
+Run with TensorFlow model artifact:
+
+```bash
+export SM_MODEL_DIR=/path/to/model-dir
+export MODEL_TYPE=tensorflow
+export MODEL_FILENAME=model.keras
+uv run --extra tensorflow python -m uvicorn serving:application --host 0.0.0.0 --port 8080
+```
+
+Notes:
+
+- `MODEL_TYPE=onnx` remains the default production path.
+- `MODEL_TYPE=sklearn` requires `scikit-learn` (and `joblib`).
+- `MODEL_TYPE=pytorch` requires `torch`.
+- `MODEL_TYPE=tensorflow` requires `tensorflow`.
 
 Run them locally with `uv`:
 

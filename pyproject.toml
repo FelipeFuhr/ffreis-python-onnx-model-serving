@@ -45,6 +45,16 @@ grpc = [
     "grpcio>=1.78.0",
     "protobuf>=6.31.1",
 ]
+sklearn = [
+    "scikit-learn>=1.6.0",
+    "joblib>=1.4.0",
+]
+torch = [
+    "torch>=2.5.0",
+]
+tensorflow = [
+    "tensorflow>=2.19.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -88,6 +98,10 @@ exclude = ["src/onnx_serving_grpc/.*"]
 
 [[tool.mypy.overrides]]
 module = ["grpc", "grpc.*", "onnx_serving_grpc", "onnx_serving_grpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

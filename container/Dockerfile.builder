@@ -1,5 +1,6 @@
+ARG BASE_BUILDER_IMAGE=ffreis/base-builder
 ARG UV_VENV_IMAGE=ffreis/uv-venv
-FROM ffreis/base-builder
+FROM ${BASE_BUILDER_IMAGE}
 ARG UV_VENV_IMAGE
 
 USER root

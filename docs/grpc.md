@@ -15,9 +15,24 @@ uv sync --extra grpc
 
 ## Run server
 
+Local-only bind (recommended default):
+
+```bash
+uv run --extra grpc onnx-model-serving-grpc --host 127.0.0.1 --port 50052
+```
+
+Container bind (required when traffic comes from other containers/pods):
+
 ```bash
 uv run --extra grpc onnx-model-serving-grpc --host 0.0.0.0 --port 50052
 ```
+
+## Security note
+
+- Default gRPC port is `50052` (override with `--port`).
+- Binding to `0.0.0.0` exposes the service on all interfaces in the container/host network namespace.
+- In production, prefer private networks and restrict access using firewall rules, Kubernetes NetworkPolicies, service mesh policies, or security groups.
+- Avoid publishing the gRPC port publicly unless required. Expose only to trusted peers/load balancers.
 
 ## API surface
 

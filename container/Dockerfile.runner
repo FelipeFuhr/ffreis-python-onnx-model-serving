@@ -1,6 +1,7 @@
+ARG BASE_RUNNER_IMAGE=ffreis/base-runner
 ARG BUILDER_IMAGE=ffreis/builder
 ARG UV_VENV_IMAGE=ffreis/uv-venv
-FROM ffreis/base-runner
+FROM ${BASE_RUNNER_IMAGE}
 ARG BUILDER_IMAGE
 ARG UV_VENV_IMAGE
 

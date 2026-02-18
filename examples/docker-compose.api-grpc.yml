@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: container/Dockerfile.services
-    image: ffreis-onnx-serving:api-grpc-smoke
+    image: ${IMAGE_ROOT:-ffreis}-onnx-serving:${IMAGE_TAG:-api-grpc-smoke}
     command:
       - python
       - examples/build_smoke_model.py
@@ -12,7 +12,7 @@ services:
       - smoke-model:/models
 
   serving-api:
-    image: ffreis-onnx-serving:api-grpc-smoke
+    image: ${IMAGE_ROOT:-ffreis}-onnx-serving:${IMAGE_TAG:-api-grpc-smoke}
     depends_on:
       model-init:
         condition: service_completed_successfully
@@ -34,7 +34,7 @@ services:
     volumes:
       - smoke-model:/models:ro
     ports:
-      - "18080:8080"
+      - "127.0.0.1:18080:8080"
     healthcheck:
       test:
         - CMD
@@ -46,7 +46,7 @@ services:
       retries: 30
 
   serving-grpc:
-    image: ffreis-onnx-serving:api-grpc-smoke
+    image: ${IMAGE_ROOT:-ffreis}-onnx-serving:${IMAGE_TAG:-api-grpc-smoke}
     depends_on:
       model-init:
         condition: service_completed_successfully
@@ -68,15 +68,24 @@ services:
     volumes:
       - smoke-model:/models:ro
     ports:
-      - "15052:50052"
+      - "127.0.0.1:15052:50052"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import grpc; grpc.channel_ready_future(grpc.insecure_channel('127.0.0.1:50052')).result(timeout=3)"
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   smoke:
-    image: ffreis-onnx-serving:api-grpc-smoke
+    image: ${IMAGE_ROOT:-ffreis}-onnx-serving:${IMAGE_TAG:-api-grpc-smoke}
     depends_on:
       serving-api:
         condition: service_healthy
       serving-grpc:
-        condition: service_started
+        condition: service_healthy
     command:
       - python
       - examples/smoke_api_grpc.py

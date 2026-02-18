@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import types
 
 import numpy as np
@@ -94,8 +95,8 @@ def test_live_and_ready_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     service = module.InferenceGrpcService(Settings())
 
-    live = service.Live(object(), object())
-    ready = service.Ready(object(), object())
+    live = asyncio.run(service.Live(object(), object()))
+    ready = asyncio.run(service.Ready(object(), object()))
 
     assert live.ok is True
     assert live.status == "live"
@@ -113,7 +114,7 @@ def test_ready_reports_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda settings: _AdapterStub(ready=False),
     )
     service = module.InferenceGrpcService(Settings())
-    ready = service.Ready(object(), object())
+    ready = asyncio.run(service.Ready(object(), object()))
     assert ready.ok is False
     assert ready.status == "not_ready"
 
@@ -127,25 +128,29 @@ def test_predict_success_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         "load_adapter",
         lambda settings: _AdapterStub(value=[42]),
     )
+
+    def _parse_payload(
+        payload: bytes, *, content_type: str, settings: Settings
+    ) -> ParsedInput:
+        _ = (payload, content_type, settings)
+        return ParsedInput(X=np.zeros((2, 2), dtype=np.float32))
+
+    def _format_output(
+        predictions: object, *, accept: str, settings: Settings
+    ) -> tuple[bytes, str]:
+        _ = (predictions, accept, settings)
+        return (b'{"predictions":[42]}', "application/json")
+
     monkeypatch.setattr(
         module,
         "parse_payload",
-        lambda payload, *, content_type, settings: ParsedInput(  # noqa: ARG005
-            X=np.zeros((2, 2), dtype=np.float32)
-        ),
+        _parse_payload,
     )
-    monkeypatch.setattr(
-        module,
-        "format_output",
-        lambda predictions, *, accept, settings: (  # noqa: ARG005
-            b'{"predictions":[42]}',
-            "application/json",
-        ),
-    )
+    monkeypatch.setattr(module, "format_output", _format_output)
 
     service = module.InferenceGrpcService(Settings())
     request = types.SimpleNamespace(payload=b"{}", content_type="", accept="")
-    reply = service.Predict(request, None)
+    reply = asyncio.run(service.Predict(request, None))
 
     assert reply.body == b'{"predictions":[42]}'
     assert reply.content_type == "application/json"
@@ -171,7 +176,7 @@ def test_predict_maps_value_error_to_invalid_argument(
         content_type="application/json",
         accept="application/json",
     )
-    reply = service.Predict(request, context)
+    reply = asyncio.run(service.Predict(request, context))
 
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert context.details == "invalid input"
@@ -185,12 +190,17 @@ def test_predict_maps_unexpected_error_to_internal(
     import onnx_model_serving.grpc.server as module
 
     monkeypatch.setattr(module, "load_adapter", lambda settings: _AdapterStub())
+
+    def _parse_payload(
+        payload: bytes, *, content_type: str, settings: Settings
+    ) -> ParsedInput:
+        _ = (payload, content_type, settings)
+        return ParsedInput(X=np.zeros((1, 1), dtype=np.float32))
+
     monkeypatch.setattr(
         module,
         "parse_payload",
-        lambda payload, *, content_type, settings: ParsedInput(  # noqa: ARG005
-            X=np.zeros((1, 1), dtype=np.float32)
-        ),
+        _parse_payload,
     )
 
     def _explode(*_args: object, **_kwargs: object) -> tuple[bytes, str]:
@@ -204,7 +214,7 @@ def test_predict_maps_unexpected_error_to_internal(
         content_type="application/json",
         accept="application/json",
     )
-    reply = service.Predict(request, context)
+    reply = asyncio.run(service.Predict(request, context))
 
     assert context.code == grpc.StatusCode.INTERNAL
     assert context.details == "explode"
@@ -224,15 +234,15 @@ def test_create_server_registers_service(monkeypatch: pytest.MonkeyPatch) -> Non
 
     fake_server = _FakeServer()
 
-    def _fake_grpc_server(executor: object) -> _FakeServer:
-        calls["executor"] = executor
+    def _fake_grpc_server(**kwargs: object) -> _FakeServer:
+        calls["kwargs"] = kwargs
         return fake_server
 
     def _fake_register(servicer: object, server: object) -> None:
         calls["servicer"] = servicer
         calls["server"] = server
 
-    monkeypatch.setattr(module.grpc, "server", _fake_grpc_server)
+    monkeypatch.setattr(module.grpc.aio, "server", _fake_grpc_server)
     monkeypatch.setattr(
         module,
         "_require_grpc_stubs_module",
@@ -258,10 +268,10 @@ def test_main_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
     started = {"start": False, "wait": False}
 
     class _Server:
-        def start(self: _Server) -> None:
+        async def start(self: _Server) -> None:
             started["start"] = True
 
-        def wait_for_termination(self: _Server) -> None:
+        async def wait_for_termination(self: _Server) -> None:
             started["wait"] = True
 
     monkeypatch.setattr(module, "create_server", lambda *args, **kwargs: _Server())

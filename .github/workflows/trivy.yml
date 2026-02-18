@@ -146,16 +146,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in trivy-results/*.sarif; do
+          shopt -s nullglob
+          files=(trivy-results/*.sarif)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning::No Trivy SARIF files found to upload."
+            exit 0
+          fi
+          failures=0
+          for f in "${files[@]}"; do
             name="$(basename "$f" .sarif)"
             echo "Uploading $f with category trivy-$name"
             sarif_payload="$(gzip -c "$f" | base64 | tr -d '\n')"
-            gh api \
+            if ! response="$(gh api \
               -X POST \
               /repos/${{ github.repository }}/code-scanning/sarifs \
               -f sarif="${sarif_payload}" \
               -f commit_sha="${{ github.sha }}" \
-              -f ref="${{ github.ref }}"
+              -f ref="${{ github.ref }}" 2>&1)"; then
+              failures=$((failures + 1))
+              echo "::warning title=Trivy SARIF upload failed::${f}: ${response}"
+              continue
+            fi
+            echo "${response}"
           done
+          if [ "$failures" -gt 0 ]; then
+            echo "::warning::${failures} Trivy SARIF upload(s) failed; vulnerability scan results were still generated."
+          fi
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

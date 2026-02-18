@@ -1,11 +1,12 @@
 """Tests for application."""
 
 import types
-from typing import Self
+from typing import Any, Self, cast
 
 import httpx
 import numpy as np
 import pytest
+from fastapi import Request
 
 from application import _batch_size, _NoopSpan, create_application
 from config import Settings
@@ -68,9 +69,13 @@ async def test_builder_run_inference_raises_when_adapter_missing(
         lambda self: None,
         builder,
     )
+    run_inference = cast(
+        Any, application_module.InferenceApplicationBuilder.__dict__["_run_inference"]
+    )
     with pytest.raises(RuntimeError, match="Adapter failed to load"):
-        await builder._run_inference(  # noqa: SLF001
-            request=object(),  # type: ignore[arg-type]
+        await run_inference(
+            builder,
+            request=cast(Request, object()),
             start_time=0.0,
         )
 
@@ -88,7 +93,13 @@ def test_readiness_returns_500_when_adapter_stays_none(
         lambda self: None,
         builder,
     )
-    response = builder._build_readiness_response()  # noqa: SLF001
+    build_readiness_response = cast(
+        Any,
+        application_module.InferenceApplicationBuilder.__dict__[
+            "_build_readiness_response"
+        ],
+    )
+    response = build_readiness_response(builder)
     assert response.status_code == 500
 
 
