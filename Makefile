@@ -218,6 +218,10 @@ coverage: ## Run tests with coverage output
 test-grpc-parity: ## Run gRPC/API parity tests
 	$(VENV)/bin/pytest -q tests/integration_tests/test_grpc_parity.py
 
+.PHONY: test-grpc-parity-property
+test-grpc-parity-property: ## Run gRPC/API parity property tests (Hypothesis)
+	$(VENV)/bin/pytest -q tests/integration_tests/test_grpc_parity.py -m property
+
 .PHONY: smoke-api-grpc
 smoke-api-grpc: ## Run docker-compose HTTP + gRPC smoke test
 	@set -euo pipefail; \

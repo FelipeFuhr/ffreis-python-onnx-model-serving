@@ -12,16 +12,21 @@ import numpy as np
 from base_adapter import BaseAdapter
 from config import Settings
 from parsed_types import ParsedInput
+from value_types import JsonDict, PredictionValue
 
 
 class _TensorDType(Protocol):
     is_floating_point: bool
 
 
+class _TorchDTypeLike(Protocol):
+    """Marker protocol for torch dtype values."""
+
+
 class _TorchTensor(Protocol):
     dtype: _TensorDType
 
-    def to(self: Self, *, dtype: object) -> _TorchTensor:
+    def to(self: Self, *, dtype: _TorchDTypeLike) -> _TorchTensor:
         """Cast tensor dtype."""
 
     def detach(self: Self) -> _TorchTensor:
@@ -38,7 +43,7 @@ class _TorchModel(Protocol):
     def eval(self: Self) -> None:
         """Switch model to eval mode."""
 
-    def __call__(self: Self, tensor: _TorchTensor) -> object:
+    def __call__(self: Self, tensor: _TorchTensor) -> PredictionValue:
         """Run model forward pass."""
 
 
@@ -48,8 +53,8 @@ class _TorchJitModule(Protocol):
 
 
 class _TorchModule(Protocol):
-    Tensor: type[object]
-    float32: object
+    Tensor: type
+    float32: _TorchDTypeLike
     jit: _TorchJitModule
 
     def load(self: Self, model_path: str, map_location: str = "cpu") -> _TorchModel:
@@ -58,7 +63,7 @@ class _TorchModule(Protocol):
     def as_tensor(self: Self, array: np.ndarray) -> _TorchTensor:
         """Create tensor from ndarray."""
 
-    def no_grad(self: Self) -> AbstractContextManager[object]:
+    def no_grad(self: Self) -> AbstractContextManager[None]:
         """Return no-grad context manager."""
 
 
@@ -103,28 +108,26 @@ class PytorchAdapter(BaseAdapter):
             return array.reshape(1, -1)
         return array
 
-    def _to_python(self: Self, value: object) -> object:
+    def _to_python(self: Self, value: PredictionValue) -> PredictionValue:
         """Recursively convert framework outputs to JSON-serializable shapes."""
         if hasattr(self._torch, "Tensor") and isinstance(value, self._torch.Tensor):
             tensor_value = cast(_TorchTensor, value)
-            return tensor_value.detach().cpu().numpy().tolist()
+            return cast(PredictionValue, tensor_value.detach().cpu().numpy().tolist())
         if isinstance(value, np.ndarray):
-            return value.tolist()
+            return cast(PredictionValue, value.tolist())
         if isinstance(value, list):
             return [self._to_python(item) for item in value]
         if isinstance(value, tuple):
             return [self._to_python(item) for item in value]
         if isinstance(value, dict):
-            return {str(k): self._to_python(v) for k, v in value.items()}
+            mapped: JsonDict = {str(k): self._to_python(v) for k, v in value.items()}
+            return mapped
         if isinstance(value, np.generic):
-            return value.item()
+            return cast(PredictionValue, value.item())
         return value
 
-    def predict(self: Self, parsed_input: object) -> object:
+    def predict(self: Self, parsed_input: ParsedInput) -> PredictionValue:
         """Run prediction with PyTorch model."""
-        if not isinstance(parsed_input, ParsedInput):
-            raise TypeError("PyTorch adapter expects ParsedInput")
-
         features = self._extract_features(parsed_input)
         tensor = self._torch.as_tensor(features)
         if tensor.dtype.is_floating_point:
@@ -132,7 +135,7 @@ class PytorchAdapter(BaseAdapter):
 
         no_grad = getattr(self._torch, "no_grad", None)
         context = (
-            cast(AbstractContextManager[object], no_grad())
+            cast(AbstractContextManager[None], no_grad())
             if callable(no_grad)
             else nullcontext()
         )

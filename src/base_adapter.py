@@ -6,6 +6,8 @@ import os
 from abc import ABC, abstractmethod
 
 from config import Settings
+from parsed_types import ParsedInput
+from value_types import PredictionValue
 
 
 class BaseAdapter(ABC):
@@ -23,17 +25,17 @@ class BaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def predict(self: BaseAdapter, parsed_input: object) -> object:
+    def predict(self: BaseAdapter, parsed_input: ParsedInput) -> PredictionValue:
         """Run inference for a parsed input payload.
 
         Parameters
         ----------
-        parsed_input : object
+        parsed_input : ParsedInput
             Parsed model input.
 
         Returns
         -------
-        object
+        PredictionValue
             Model prediction output.
         """
         raise NotImplementedError

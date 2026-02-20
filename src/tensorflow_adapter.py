@@ -11,13 +11,16 @@ import numpy as np
 from base_adapter import BaseAdapter
 from config import Settings
 from parsed_types import ParsedInput
+from value_types import JsonDict, JsonValue, PredictionValue
 
 
 class _TensorflowModel(Protocol):
-    def __call__(self: Self, features: np.ndarray, training: bool = False) -> object:
+    def __call__(
+        self: Self, features: np.ndarray, training: bool = False
+    ) -> PredictionValue:
         """Run callable inference path."""
 
-    def predict(self: Self, features: np.ndarray, verbose: int = 0) -> object:
+    def predict(self: Self, features: np.ndarray, verbose: int = 0) -> PredictionValue:
         """Run predict-style inference path."""
 
 
@@ -32,6 +35,11 @@ class _KerasModule(Protocol):
 
 class _TensorflowModule(Protocol):
     keras: _KerasModule
+
+
+class _NumpyConvertible(Protocol):
+    def numpy(self: Self) -> JsonValue:
+        """Convert framework tensor wrapper to Python-compatible value."""
 
 
 class TensorflowAdapter(BaseAdapter):
@@ -70,7 +78,7 @@ class TensorflowAdapter(BaseAdapter):
             return array.reshape(1, -1)
         return array
 
-    def _to_python(self: Self, value: object) -> object:
+    def _to_python(self: Self, value: PredictionValue) -> PredictionValue:
         """Recursively convert framework outputs to JSON-serializable shapes."""
         if isinstance(value, np.ndarray):
             return value.tolist()
@@ -79,21 +87,20 @@ class TensorflowAdapter(BaseAdapter):
         if isinstance(value, tuple):
             return [self._to_python(item) for item in value]
         if isinstance(value, dict):
-            return {str(k): self._to_python(v) for k, v in value.items()}
-        if hasattr(value, "numpy"):
-            numpy_value = value.numpy()
+            mapped: JsonDict = {str(k): self._to_python(v) for k, v in value.items()}
+            return mapped
+        numpy_method = getattr(value, "numpy", None)
+        if callable(numpy_method):
+            numpy_value = cast(_NumpyConvertible, value).numpy()
             if isinstance(numpy_value, np.ndarray):
-                return numpy_value.tolist()
+                return cast(PredictionValue, numpy_value.tolist())
             return numpy_value
         if isinstance(value, np.generic):
-            return value.item()
+            return cast(PredictionValue, value.item())
         return value
 
-    def predict(self: Self, parsed_input: object) -> object:
+    def predict(self: Self, parsed_input: ParsedInput) -> PredictionValue:
         """Run prediction with tensorflow model."""
-        if not isinstance(parsed_input, ParsedInput):
-            raise TypeError("TensorFlow adapter expects ParsedInput")
-
         features = self._extract_features(parsed_input).astype(np.float32, copy=False)
 
         if callable(self.model):

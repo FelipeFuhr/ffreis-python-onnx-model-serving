@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+
+from value_types import JsonDict
 
 try:
     import yaml
@@ -13,7 +14,7 @@ except Exception:  # pragma: no cover - optional dependency for contract loading
 
 
 @lru_cache(maxsize=1)
-def load_openapi_contract() -> dict[str, Any] | None:
+def load_openapi_contract() -> JsonDict | None:
     """Load docs/openapi.yaml when available.
 
     Returns ``None`` when the file does not exist or PyYAML is unavailable.

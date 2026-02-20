@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from types import TracebackType
-from typing import Any, Literal, Protocol, cast
+from typing import Literal, Protocol, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -26,8 +26,10 @@ from telemetry import (
     instrument_fastapi_application,
     setup_telemetry,
 )
+from value_types import JsonDict, PredictionValue, SpanAttributeValue
 
 log = logging.getLogger("byoc")
+_OPENAPI_ATTR = "openapi"
 
 try:
     Instrumentator = importlib.import_module(
@@ -51,7 +53,7 @@ class _NoopSpan:
     ) -> Literal[False]:
         return False
 
-    def set_attribute(self: _NoopSpan, _k: str, _v: object) -> None:
+    def set_attribute(self: _NoopSpan, _k: str, _v: SpanAttributeValue) -> None:
         return None
 
 
@@ -64,7 +66,7 @@ def _noop_span() -> Iterator[_NoopSpan]:
 class _SpanLike(Protocol):
     """Span protocol required by this module."""
 
-    def set_attribute(self: _SpanLike, key: str, value: object) -> None:
+    def set_attribute(self: _SpanLike, key: str, value: SpanAttributeValue) -> None:
         """Set span attribute."""
 
 
@@ -124,14 +126,13 @@ class InferenceApplicationBuilder:
         """
         generated_openapi = self.application.openapi
 
-        def _openapi() -> dict[str, object]:
+        def _openapi() -> JsonDict:
             contract = load_openapi_contract()
             if contract is not None:
                 return contract
-            return cast(dict[str, object], generated_openapi())
+            return cast(JsonDict, generated_openapi())
 
-        application_any = cast(Any, self.application)
-        application_any.openapi = _openapi
+        setattr(self.application, _OPENAPI_ATTR, _openapi)
 
     def _configure_telemetry(self: InferenceApplicationBuilder) -> None:
         """Enable application telemetry when configured."""
@@ -396,7 +397,7 @@ class InferenceApplicationBuilder:
         self: InferenceApplicationBuilder,
         adapter: BaseAdapter,
         parsed_input: ParsedInput,
-    ) -> object:
+    ) -> PredictionValue:
         """Run adapter prediction under model tracing span."""
         with tracer.start_as_current_span("model.predict"):
             return adapter.predict(parsed_input)

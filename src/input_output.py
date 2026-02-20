@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
 
 from config import Settings
 from parsed_types import ParsedInput
+from value_types import JsonArray, JsonDict, JsonValue, MetadataValue, PredictionValue
 
 APPLICATION_JSON_CONTENT_TYPE = "application/json"
 JSON_CONTENT_TYPES: tuple[str, ...] = ("application/json", "application/*+json")
@@ -76,7 +78,7 @@ def _parse_col_selector(selector: str, n_cols: int) -> list[int]:
 
 def _split_ids_and_features(
     data: np.ndarray, settings: Settings
-) -> tuple[np.ndarray, dict[str, object] | None]:
+) -> tuple[np.ndarray, dict[str, MetadataValue] | None]:
     """Split feature columns and optional identifier columns."""
     if data.ndim != 2:
         raise ValueError(f"Expected 2D array, got shape={data.shape}")
@@ -132,20 +134,20 @@ def _parse_csv(payload: bytes, settings: Settings) -> np.ndarray:
     return parsed_array
 
 
-def _parse_json(payload: bytes, settings: Settings) -> object:
+def _parse_json(payload: bytes, settings: Settings) -> JsonValue:
     """Parse JSON payload and extract instances when configured."""
-    obj = json.loads(payload.decode("utf-8"))
+    obj = cast(JsonValue, json.loads(payload.decode("utf-8")))
     key = settings.json_key_instances
     return obj[key] if isinstance(obj, dict) and key in obj else obj
 
 
-def _parse_jsonl(payload: bytes) -> list[object]:
+def _parse_jsonl(payload: bytes) -> JsonArray:
     """Parse JSON Lines payload into record list."""
     lines = payload.decode("utf-8").splitlines()
-    records = []
+    records: JsonArray = []
     for ln in lines:
         if ln.strip():
-            records.append(json.loads(ln))
+            records.append(cast(JsonValue, json.loads(ln)))
     return records
 
 
@@ -209,8 +211,8 @@ class PayloadParser:
         onnx_input_map: dict[str, str],
     ) -> ParsedInput:
         """Parse JSON/JSONL into named ONNX input tensors."""
-        records = self._extract_records(payload, content_type)
-        records = self._validate_record_shape(records)
+        raw_records = self._extract_records(payload, content_type)
+        records = self._validate_record_shape(raw_records)
 
         dtype_map = _load_json_map(self.settings.onnx_input_dtype_map_json) or {}
         tensors: dict[str, np.ndarray] = {}
@@ -257,15 +259,15 @@ class PayloadParser:
 
     def _extract_records(
         self: PayloadParser, payload: bytes, content_type: str
-    ) -> object:
+    ) -> JsonValue:
         """Extract records for JSON and JSON Lines content types."""
         if content_type in JSON_CONTENT_TYPES:
             return _parse_json(payload, self.settings)
         return _parse_jsonl(payload)
 
     def _validate_record_shape(
-        self: PayloadParser, records: object
-    ) -> list[dict[str, object]]:
+        self: PayloadParser, records: JsonValue
+    ) -> list[JsonDict]:
         """Validate ONNX multi-input records shape and type."""
         if isinstance(records, dict):
             records = [records]
@@ -278,11 +280,11 @@ class PayloadParser:
             raise ValueError(
                 "ONNX multi-input mode expects each record to be a JSON object"
             )
-        return records
+        return cast(list[JsonDict], records)
 
     def _build_tensor_for_input(
         self: PayloadParser,
-        records: list[dict[str, object]],
+        records: list[JsonDict],
         request_key: str,
         onnx_input_name: str,
         dtype_map: dict[str, str],
@@ -381,7 +383,7 @@ class OutputFormatter:
         self.settings = settings
 
     def format(
-        self: OutputFormatter, predictions: object, accept: str
+        self: OutputFormatter, predictions: PredictionValue, accept: str
     ) -> tuple[str, str]:
         """Format predictions as JSON or CSV."""
         if isinstance(predictions, dict):
@@ -390,28 +392,27 @@ class OutputFormatter:
         normalized_accept = (
             (accept or self.settings.default_accept).split(",")[0].strip().lower()
         )
-        if hasattr(predictions, "tolist"):
-            predictions = predictions.tolist()
 
         if normalized_accept in CSV_CONTENT_TYPES:
             return self._format_csv(predictions), "text/csv"
         return self._format_json(predictions), APPLICATION_JSON_CONTENT_TYPE
 
-    def _format_csv(self: OutputFormatter, predictions: object) -> str:
+    def _format_csv(self: OutputFormatter, predictions: PredictionValue) -> str:
         """Format scalar/vector/matrix predictions as CSV text."""
         if (
             isinstance(predictions, list)
             and predictions
-            and isinstance(predictions[0], list)
+            and all(isinstance(item, list) for item in predictions)
         ):
+            rows = cast(list[list[JsonValue]], predictions)
             return "\n".join(
-                self.settings.csv_delimiter.join(map(str, row)) for row in predictions
+                self.settings.csv_delimiter.join(map(str, row)) for row in rows
             )
         if not isinstance(predictions, list):
             predictions = [predictions]
         return "\n".join(map(str, predictions))
 
-    def _format_json(self: OutputFormatter, predictions: object) -> str:
+    def _format_json(self: OutputFormatter, predictions: PredictionValue) -> str:
         """Format predictions as JSON payload string."""
         if self.settings.predictions_only:
             return json.dumps(predictions)
@@ -424,7 +425,7 @@ def parse_payload(payload: bytes, content_type: str, settings: Settings) -> Pars
 
 
 def format_output(
-    predictions: object, accept: str, settings: Settings
+    predictions: PredictionValue, accept: str, settings: Settings
 ) -> tuple[str, str]:
     """Format prediction output and return body plus content type."""
     return OutputFormatter(settings).format(predictions=predictions, accept=accept)

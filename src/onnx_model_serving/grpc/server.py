@@ -16,6 +16,7 @@ from base_adapter import BaseAdapter, load_adapter
 from config import Settings
 from input_output import format_output, parse_payload
 from parsed_types import batch_size as _batch_size
+from value_types import PredictionValue
 
 log = logging.getLogger("byoc.grpc")
 
@@ -37,6 +38,21 @@ class _FallbackPredictReply:
     metadata: dict[str, str] = field(default_factory=dict)
 
 
+class _StatusReplyLike(Protocol):
+    """Protocol for status reply payload."""
+
+    ok: bool
+    status: str
+
+
+class _PredictReplyLike(Protocol):
+    """Protocol for predict reply payload."""
+
+    body: bytes
+    content_type: str
+    metadata: dict[str, str]
+
+
 def _load_grpc_stub_module(module_name: str) -> ModuleType | None:
     """Load grpc generated module by name when present."""
     try:
@@ -49,11 +65,11 @@ _INFERENCE_PB2 = _load_grpc_stub_module("onnx_serving_grpc.inference_pb2")
 _INFERENCE_PB2_GRPC = _load_grpc_stub_module("onnx_serving_grpc.inference_pb2_grpc")
 
 
-def _status_reply(*, ok: bool, status: str) -> object:
+def _status_reply(*, ok: bool, status: str) -> _StatusReplyLike:
     """Create status reply from generated stubs or fallback type."""
     if _INFERENCE_PB2 is None:
         return _FallbackStatusReply(ok=ok, status=status)
-    return _INFERENCE_PB2.StatusReply(ok=ok, status=status)
+    return cast(_StatusReplyLike, _INFERENCE_PB2.StatusReply(ok=ok, status=status))
 
 
 def _predict_reply(
@@ -61,7 +77,7 @@ def _predict_reply(
     body: bytes = b"",
     content_type: str = "",
     metadata: dict[str, str] | None = None,
-) -> object:
+) -> _PredictReplyLike:
     """Create predict reply from generated stubs or fallback type."""
     if _INFERENCE_PB2 is None:
         return _FallbackPredictReply(
@@ -69,10 +85,13 @@ def _predict_reply(
             content_type=content_type,
             metadata=metadata or {},
         )
-    return _INFERENCE_PB2.PredictReply(
-        body=body,
-        content_type=content_type,
-        metadata=metadata or {},
+    return cast(
+        _PredictReplyLike,
+        _INFERENCE_PB2.PredictReply(
+            body=body,
+            content_type=content_type,
+            metadata=metadata or {},
+        ),
     )
 
 
@@ -91,6 +110,10 @@ class _PredictRequestLike(Protocol):
     payload: bytes
     content_type: str
     accept: str
+
+
+class _HealthRequestLike(Protocol):
+    """Protocol for empty health request messages."""
 
 
 def _set_grpc_error(
@@ -121,18 +144,18 @@ class InferenceGrpcService:
 
     async def live(
         self: InferenceGrpcService,
-        request: object,
+        request: _HealthRequestLike,
         context: grpc.ServicerContext | grpc.aio.ServicerContext,
-    ) -> object:
+    ) -> _StatusReplyLike:
         """Report process liveness."""
         _ = (request, context)
         return _status_reply(ok=True, status="live")
 
     async def ready(
         self: InferenceGrpcService,
-        request: object,
+        request: _HealthRequestLike,
         context: grpc.ServicerContext | grpc.aio.ServicerContext,
-    ) -> object:
+    ) -> _StatusReplyLike:
         """Report model readiness."""
         _ = (request, context)
         is_ready = bool(self.adapter.is_ready())
@@ -143,16 +166,13 @@ class InferenceGrpcService:
 
     async def predict(
         self: InferenceGrpcService,
-        request: object,
+        request: _PredictRequestLike,
         context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
-    ) -> object:
+    ) -> _PredictReplyLike:
         """Run model prediction for a payload."""
-        predict_request = cast(_PredictRequestLike, request)
-        content_type = (
-            predict_request.content_type or self.settings.default_content_type
-        )
-        accept = predict_request.accept or self.settings.default_accept
-        payload = bytes(predict_request.payload)
+        content_type = request.content_type or self.settings.default_content_type
+        accept = request.accept or self.settings.default_accept
+        payload = bytes(request.payload)
 
         try:
             parsed_input = parse_payload(
@@ -165,7 +185,7 @@ class InferenceGrpcService:
                 raise ValueError(
                     f"too_many_records: {batch_size} > {self.settings.max_records}"
                 )
-            predictions = self.adapter.predict(parsed_input)
+            predictions: PredictionValue = self.adapter.predict(parsed_input)
             body, output_content_type = format_output(
                 predictions,
                 accept=accept,

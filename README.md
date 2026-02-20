@@ -15,6 +15,7 @@ This project demonstrates a **multi-stage Docker build** for Python that:
 
 - OpenAPI transport contract: `docs/openapi.yaml`
 - gRPC contract: `proto/onnx_serving_grpc/inference.proto`
+  - Server reflection is intentionally not enabled in runtime paths.
 
 OpenAPI documents transport behavior (paths, media types, headers, and response envelopes).
 Model-specific tensor semantics are expected to be defined by a model manifest shipped with artifacts.

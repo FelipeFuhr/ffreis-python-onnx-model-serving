@@ -12,10 +12,11 @@ import numpy as np
 from base_adapter import BaseAdapter
 from config import Settings
 from parsed_types import ParsedInput
+from value_types import PredictionValue
 
 
 class _SklearnModel(Protocol):
-    def predict(self: Self, features: np.ndarray) -> object:
+    def predict(self: Self, features: np.ndarray) -> PredictionValue:
         """Predict output for an input matrix."""
 
 
@@ -50,11 +51,8 @@ class SklearnAdapter(BaseAdapter):
         """Report whether model is loaded."""
         return self.model is not None
 
-    def predict(self: Self, parsed_input: object) -> object:
+    def predict(self: Self, parsed_input: ParsedInput) -> PredictionValue:
         """Run prediction with sklearn model."""
-        if not isinstance(parsed_input, ParsedInput):
-            raise TypeError("Sklearn adapter expects ParsedInput")
-
         if parsed_input.X is not None:
             features = parsed_input.X
         elif parsed_input.tensors:
@@ -70,4 +68,4 @@ class SklearnAdapter(BaseAdapter):
             array = array.reshape(1, -1)
         predictions = self.model.predict(array)
         prediction_array = np.asarray(predictions)
-        return prediction_array.tolist()
+        return cast(PredictionValue, prediction_array.tolist())

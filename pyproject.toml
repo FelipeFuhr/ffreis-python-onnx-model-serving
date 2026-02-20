@@ -14,6 +14,7 @@ onnx-model-serving-grpc = "onnx_model_serving.grpc.server:main"
 
 [project.optional-dependencies]
 dev = [
+    "hypothesis>=6.0.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
@@ -71,6 +72,7 @@ markers = [
     "unit: fast isolated tests",
     "integration: tests spanning multiple modules/files",
     "e2e: end-to-end tests using public entrypoints",
+    "property: property-based tests (typically Hypothesis)",
 ]
 
 [tool.black]

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from application import create_application
 from config import Settings
@@ -22,6 +25,7 @@ except (ImportError, ModuleNotFoundError) as exc:
     pytest.skip(f"grpc parity dependencies unavailable: {exc}", allow_module_level=True)
 
 pytestmark = pytest.mark.integration
+_HYPOTHESIS_MAX_EXAMPLES = int(os.getenv("HYPOTHESIS_MAX_EXAMPLES", "30"))
 
 _HTTP_TO_GRPC_SURFACE_MAP: dict[str, str] = {
     "/live": "Live",
@@ -352,3 +356,74 @@ async def test_http_and_grpc_predict_parity_for_multiple_content_types(
     assert json.loads(http_response.content.decode("utf-8")) == json.loads(
         grpc_predict.body.decode("utf-8")
     )
+
+
+@pytest.mark.property
+@settings(
+    max_examples=_HYPOTHESIS_MAX_EXAMPLES,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(
+    instances=st.lists(
+        st.lists(
+            st.floats(
+                min_value=-1_000.0,
+                max_value=1_000.0,
+                allow_nan=False,
+                allow_infinity=False,
+            ),
+            min_size=1,
+            max_size=8,
+        ),
+        min_size=1,
+        max_size=12,
+    ),
+)
+def test_http_and_grpc_predict_property_parity_for_json_instances(
+    monkeypatch: pytest.MonkeyPatch,
+    instances: list[list[float]],
+) -> None:
+    """Property check: valid JSON batches produce equivalent HTTP/gRPC predictions."""
+
+    async def _run() -> None:
+        _set_base_env(monkeypatch)
+        monkeypatch.setenv("MAX_RECORDS", "1000")
+        _patch_adapters(monkeypatch)
+
+        settings_obj = Settings()
+        app = create_application(settings_obj)
+        grpc_service = InferenceGrpcService(settings_obj)
+        payload_bytes = json.dumps({"instances": instances}).encode("utf-8")
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            http_response = await client.post(
+                "/invocations",
+                content=payload_bytes,
+                headers={
+                    "content-type": "application/json",
+                    "accept": "application/json",
+                },
+            )
+
+        grpc_predict = await grpc_service.Predict(
+            inference_pb2.PredictRequest(
+                payload=payload_bytes,
+                content_type="application/json",
+                accept="application/json",
+            ),
+            None,
+        )
+
+        assert http_response.status_code == 200
+        assert grpc_predict.content_type == "application/json"
+        assert json.loads(http_response.content.decode("utf-8")) == json.loads(
+            grpc_predict.body.decode("utf-8")
+        )
+
+    import asyncio
+
+    asyncio.run(_run())
