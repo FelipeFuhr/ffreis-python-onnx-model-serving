@@ -13,14 +13,15 @@ from pathlib import Path
 import httpx
 import pytest
 
+from application import create_application
+from config import Settings
+
 onnx = pytest.importorskip("onnx")
 pytest.importorskip("onnxruntime")
 uvicorn = pytest.importorskip("uvicorn")
 
-from onnx import TensorProto, helper  # noqa: E402
-
-from application import create_application  # noqa: E402
-from config import Settings  # noqa: E402
+TensorProto = onnx.TensorProto
+helper = onnx.helper
 
 pytestmark = pytest.mark.e2e
 

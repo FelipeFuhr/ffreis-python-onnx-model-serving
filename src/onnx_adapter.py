@@ -5,13 +5,14 @@ from __future__ import annotations
 import importlib
 import json
 import os
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 
 from base_adapter import BaseAdapter
 from config import Settings
 from parsed_types import ParsedInput
+from value_types import JsonDict, PredictionValue
 
 
 class OnnxAdapter(BaseAdapter):
@@ -115,27 +116,26 @@ class OnnxAdapter(BaseAdapter):
             return arr.astype(np.int64, copy=False)
         return arr
 
-    def predict(self: OnnxAdapter, parsed_input: object) -> object:
+    def predict(self: OnnxAdapter, parsed_input: ParsedInput) -> PredictionValue:
         """Run inference for tabular or tensor input payloads.
 
         Parameters
         ----------
-        parsed_input : object
+        parsed_input : ParsedInput
             Parsed input containing either ``X`` features or named tensors.
 
         Returns
         -------
-        object
+        PredictionValue
             Prediction output represented as JSON-serializable structures.
         """
-        if not isinstance(parsed_input, ParsedInput):
-            raise TypeError("ONNX adapter expects ParsedInput")
-
         feed = self._build_feed(parsed_input)
         if self._output_map:
             return self._predict_with_output_map(feed)
         outputs = self._predict_single_output(feed)
-        return outputs.tolist() if hasattr(outputs, "tolist") else outputs
+        return cast(
+            PredictionValue, outputs.tolist() if hasattr(outputs, "tolist") else outputs
+        )
 
     def _build_feed(
         self: OnnxAdapter, parsed_input: ParsedInput
@@ -158,7 +158,7 @@ class OnnxAdapter(BaseAdapter):
 
     def _predict_with_output_map(
         self: OnnxAdapter, feed: dict[str, np.ndarray]
-    ) -> dict[str, object]:
+    ) -> JsonDict:
         """Run inference and map outputs according to configured aliases."""
         output_map = self._output_map
         session = self.session
@@ -166,18 +166,19 @@ class OnnxAdapter(BaseAdapter):
             raise RuntimeError("ONNX output map or session not initialized")
         requested_outputs = list(output_map.values())
         outputs = session.run(requested_outputs, feed)
-        mapped_outputs = {}
+        mapped_outputs: JsonDict = {}
         for (response_key, _onnx_name), value in zip(
             output_map.items(), outputs, strict=False
         ):
-            mapped_outputs[response_key] = (
-                value.tolist() if hasattr(value, "tolist") else value
+            mapped_outputs[response_key] = cast(
+                PredictionValue,
+                value.tolist() if hasattr(value, "tolist") else value,
             )
         return mapped_outputs
 
     def _predict_single_output(
         self: OnnxAdapter, feed: dict[str, np.ndarray]
-    ) -> object:
+    ) -> np.ndarray:
         """Run inference and return a single configured output tensor."""
         session = self.session
         output_names = self.output_names
@@ -211,5 +212,5 @@ class _OnnxSessionProtocol(Protocol):
         self: _OnnxSessionProtocol,
         output_names: list[str],
         feed: dict[str, np.ndarray],
-    ) -> list[object]:
+    ) -> list[np.ndarray]:
         """Run inference for output names and input feed."""

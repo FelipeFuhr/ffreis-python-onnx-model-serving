@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 from pydantic import BaseModel, ConfigDict
+
+from value_types import MetadataValue
 
 
 class ParsedInput(BaseModel):
@@ -17,7 +17,7 @@ class ParsedInput(BaseModel):
         Tabular features represented as a two-dimensional array.
     tensors : dict[str, numpy.ndarray] | None, default=None
         Named tensors for multi-input models.
-    meta : dict[str, Any] | None, default=None
+    meta : dict[str, MetadataValue] | None, default=None
         Auxiliary metadata generated during parsing.
     """
 
@@ -25,4 +25,25 @@ class ParsedInput(BaseModel):
 
     X: np.ndarray | None = None
     tensors: dict[str, np.ndarray] | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, MetadataValue] | None = None
+
+
+def batch_size(parsed: ParsedInput) -> int:
+    """Extract batch size from parsed input payload.
+
+    Parameters
+    ----------
+    parsed : ParsedInput
+        Parsed input object.
+
+    Returns
+    -------
+    int
+        Inferred batch size.
+    """
+    if parsed.X is not None:
+        return int(parsed.X.shape[0])
+    if parsed.tensors:
+        first = next(iter(parsed.tensors.values()))
+        return int(first.shape[0]) if getattr(first, "ndim", 0) > 0 else 1
+    raise ValueError("Parsed input contained no features/tensors")

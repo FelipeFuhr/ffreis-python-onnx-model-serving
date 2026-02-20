@@ -17,15 +17,19 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
 from input_output import format_output, parse_payload
+from openapi_contract import load_openapi_contract
 from parsed_types import ParsedInput
+from parsed_types import batch_size as _batch_size
 from telemetry import (
     get_current_trace_identifiers,
     get_tracer,
     instrument_fastapi_application,
     setup_telemetry,
 )
+from value_types import JsonDict, PredictionValue, SpanAttributeValue
 
 log = logging.getLogger("byoc")
+_OPENAPI_ATTR = "openapi"
 
 try:
     Instrumentator = importlib.import_module(
@@ -49,7 +53,7 @@ class _NoopSpan:
     ) -> Literal[False]:
         return False
 
-    def set_attribute(self: _NoopSpan, _k: str, _v: object) -> None:
+    def set_attribute(self: _NoopSpan, _k: str, _v: SpanAttributeValue) -> None:
         return None
 
 
@@ -62,7 +66,7 @@ def _noop_span() -> Iterator[_NoopSpan]:
 class _SpanLike(Protocol):
     """Span protocol required by this module."""
 
-    def set_attribute(self: _SpanLike, key: str, value: object) -> None:
+    def set_attribute(self: _SpanLike, key: str, value: SpanAttributeValue) -> None:
         """Set span attribute."""
 
 
@@ -86,27 +90,6 @@ class _NoopTracer:
 
 
 tracer: _TracerLike = cast(_TracerLike, get_tracer("byoc") or _NoopTracer())
-
-
-def _batch_size(parsed: ParsedInput) -> int:
-    """Extract batch size from parsed input object.
-
-    Parameters
-    ----------
-    parsed : ParsedInput
-        Parsed input data.
-
-    Returns
-    -------
-    int
-        Batch size.
-    """
-    if parsed.X is not None:
-        return int(parsed.X.shape[0])
-    if parsed.tensors:
-        first = next(iter(parsed.tensors.values()))
-        return int(first.shape[0]) if getattr(first, "ndim", 0) > 0 else 1
-    raise ValueError("Parsed input contained no features/tensors")
 
 
 class InferenceApplicationBuilder:
@@ -133,7 +116,23 @@ class InferenceApplicationBuilder:
         self._configure_metrics()
         self._register_body_limit_middleware()
         self._register_routes()
+        self._bind_openapi_contract()
         return self.application
+
+    def _bind_openapi_contract(self: InferenceApplicationBuilder) -> None:
+        """Serve checked-in OpenAPI contract when available.
+
+        Falls back to FastAPI's generated schema when contract file is missing.
+        """
+        generated_openapi = self.application.openapi
+
+        def _openapi() -> JsonDict:
+            contract = load_openapi_contract()
+            if contract is not None:
+                return contract
+            return cast(JsonDict, generated_openapi())
+
+        setattr(self.application, _OPENAPI_ATTR, _openapi)
 
     def _configure_telemetry(self: InferenceApplicationBuilder) -> None:
         """Enable application telemetry when configured."""
@@ -194,6 +193,11 @@ class InferenceApplicationBuilder:
             """
             return self._build_liveness_response()
 
+        @self.application.get("/healthz")
+        def healthz() -> PlainTextResponse:
+            """Return process liveness status (Kubernetes-style endpoint)."""
+            return self._build_liveness_response()
+
         @self.application.get("/ready")
         def ready() -> PlainTextResponse:
             """Return model readiness status.
@@ -203,6 +207,11 @@ class InferenceApplicationBuilder:
             fastapi.responses.PlainTextResponse
                 HTTP 200 when model is ready, otherwise HTTP 500.
             """
+            return self._build_readiness_response()
+
+        @self.application.get("/readyz")
+        def readyz() -> PlainTextResponse:
+            """Return model readiness status (Kubernetes-style endpoint)."""
             return self._build_readiness_response()
 
         @self.application.get("/ping")
@@ -388,7 +397,7 @@ class InferenceApplicationBuilder:
         self: InferenceApplicationBuilder,
         adapter: BaseAdapter,
         parsed_input: ParsedInput,
-    ) -> object:
+    ) -> PredictionValue:
         """Run adapter prediction under model tracing span."""
         with tracer.start_as_current_span("model.predict"):
             return adapter.predict(parsed_input)
