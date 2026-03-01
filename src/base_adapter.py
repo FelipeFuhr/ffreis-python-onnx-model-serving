@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from config import Settings
 from parsed_types import ParsedInput
@@ -41,6 +42,102 @@ class BaseAdapter(ABC):
         raise NotImplementedError
 
 
+_SUPPORTED_MODEL_TYPES = frozenset({"onnx", "sklearn", "pytorch", "tensorflow"})
+
+
+def _build_onnx_adapter(settings: Settings) -> BaseAdapter:
+    from onnx_adapter import OnnxAdapter
+
+    return OnnxAdapter(settings)
+
+
+def _build_sklearn_adapter(settings: Settings) -> BaseAdapter:
+    from sklearn_adapter import SklearnAdapter
+
+    return SklearnAdapter(settings)
+
+
+def _build_pytorch_adapter(settings: Settings) -> BaseAdapter:
+    from pytorch_adapter import PytorchAdapter
+
+    return PytorchAdapter(settings)
+
+
+def _build_tensorflow_adapter(settings: Settings) -> BaseAdapter:
+    from tensorflow_adapter import TensorflowAdapter
+
+    return TensorflowAdapter(settings)
+
+
+_ADAPTER_BUILDERS: dict[str, Callable[[Settings], BaseAdapter]] = {
+    "onnx": _build_onnx_adapter,
+    "sklearn": _build_sklearn_adapter,
+    "pytorch": _build_pytorch_adapter,
+    "tensorflow": _build_tensorflow_adapter,
+}
+
+
+def _build_adapter_for(model_type: str, settings: Settings) -> BaseAdapter:
+    return _ADAPTER_BUILDERS[model_type](settings)
+
+
+def _validated_model_type(settings: Settings) -> str | None:
+    model_type = settings.model_type
+    if not model_type:
+        return None
+    if model_type not in _SUPPORTED_MODEL_TYPES:
+        raise RuntimeError(
+            f"MODEL_TYPE={model_type} is not implemented in this package"
+        )
+    return model_type
+
+
+def _infer_model_type_from_filename(settings: Settings) -> str | None:
+    model_filename = settings.model_filename.strip()
+    if not model_filename:
+        return None
+
+    model_path = os.path.join(settings.model_dir, model_filename)
+    lowered = model_filename.lower()
+
+    if lowered.endswith(".onnx") and os.path.exists(model_path):
+        return "onnx"
+    if lowered.endswith((".joblib", ".pkl")) and os.path.exists(model_path):
+        return "sklearn"
+    if lowered.endswith((".pt", ".pth", ".jit", ".torchscript")) and os.path.exists(
+        model_path
+    ):
+        return "pytorch"
+    if lowered.endswith((".keras", ".h5", ".hdf5")) and os.path.exists(model_path):
+        return "tensorflow"
+    if os.path.isdir(model_path) and os.path.exists(
+        os.path.join(model_path, "saved_model.pb")
+    ):
+        return "tensorflow"
+    return None
+
+
+def _infer_model_type_from_defaults(settings: Settings) -> str | None:
+    onnx_default = os.path.join(settings.model_dir, "model.onnx")
+    sklearn_default = os.path.join(settings.model_dir, "model.joblib")
+    pickle_default = os.path.join(settings.model_dir, "model.pkl")
+    pytorch_default = os.path.join(settings.model_dir, "model.pt")
+    tensorflow_default = os.path.join(settings.model_dir, "model.keras")
+    tensorflow_saved_model_default = os.path.join(settings.model_dir, "saved_model")
+
+    if os.path.exists(onnx_default):
+        return "onnx"
+    if os.path.exists(sklearn_default) or os.path.exists(pickle_default):
+        return "sklearn"
+    if os.path.exists(pytorch_default):
+        return "pytorch"
+    if os.path.exists(tensorflow_default) or os.path.exists(
+        tensorflow_saved_model_default
+    ):
+        return "tensorflow"
+    return None
+
+
 def load_adapter(settings: Settings) -> BaseAdapter:
     """Instantiate the appropriate adapter for current settings.
 
@@ -54,67 +151,15 @@ def load_adapter(settings: Settings) -> BaseAdapter:
     BaseAdapter
         Instantiated inference adapter.
     """
-    from onnx_adapter import OnnxAdapter
-    from pytorch_adapter import PytorchAdapter
-    from sklearn_adapter import SklearnAdapter
-    from tensorflow_adapter import TensorflowAdapter
+    explicit_model_type = _validated_model_type(settings)
+    if explicit_model_type is not None:
+        return _build_adapter_for(explicit_model_type, settings)
 
-    model_filename = settings.model_filename.strip()
-
-    onnx_default = os.path.join(settings.model_dir, "model.onnx")
-    sklearn_default = os.path.join(settings.model_dir, "model.joblib")
-    pickle_default = os.path.join(settings.model_dir, "model.pkl")
-    pytorch_default = os.path.join(settings.model_dir, "model.pt")
-    tensorflow_default = os.path.join(settings.model_dir, "model.keras")
-    tensorflow_saved_model_default = os.path.join(settings.model_dir, "saved_model")
-
-    if settings.model_type == "onnx":
-        return OnnxAdapter(settings)
-    if settings.model_type == "sklearn":
-        return SklearnAdapter(settings)
-    if settings.model_type == "pytorch":
-        return PytorchAdapter(settings)
-    if settings.model_type == "tensorflow":
-        return TensorflowAdapter(settings)
-
-    if settings.model_type and settings.model_type not in {
-        "onnx",
-        "sklearn",
-        "pytorch",
-        "tensorflow",
-    }:
-        raise RuntimeError(
-            f"MODEL_TYPE={settings.model_type} is not implemented in this package"
-        )
-
-    if model_filename:
-        model_path = os.path.join(settings.model_dir, model_filename)
-        lowered = model_filename.lower()
-        if lowered.endswith(".onnx") and os.path.exists(model_path):
-            return OnnxAdapter(settings)
-        if lowered.endswith((".joblib", ".pkl")) and (os.path.exists(model_path)):
-            return SklearnAdapter(settings)
-        if lowered.endswith((".pt", ".pth", ".jit", ".torchscript")) and (
-            os.path.exists(model_path)
-        ):
-            return PytorchAdapter(settings)
-        if lowered.endswith((".keras", ".h5", ".hdf5")) and os.path.exists(model_path):
-            return TensorflowAdapter(settings)
-        if os.path.isdir(model_path) and os.path.exists(
-            os.path.join(model_path, "saved_model.pb")
-        ):
-            return TensorflowAdapter(settings)
-    else:
-        if os.path.exists(onnx_default):
-            return OnnxAdapter(settings)
-        if os.path.exists(sklearn_default) or os.path.exists(pickle_default):
-            return SklearnAdapter(settings)
-        if os.path.exists(pytorch_default):
-            return PytorchAdapter(settings)
-        if os.path.exists(tensorflow_default) or os.path.exists(
-            tensorflow_saved_model_default
-        ):
-            return TensorflowAdapter(settings)
+    inferred_model_type = _infer_model_type_from_filename(settings)
+    if inferred_model_type is None:
+        inferred_model_type = _infer_model_type_from_defaults(settings)
+    if inferred_model_type is not None:
+        return _build_adapter_for(inferred_model_type, settings)
 
     raise RuntimeError(
         "Set MODEL_TYPE=onnx|sklearn|pytorch|tensorflow or place a known model "

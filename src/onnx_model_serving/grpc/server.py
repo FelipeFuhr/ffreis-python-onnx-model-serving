@@ -7,6 +7,7 @@ import asyncio
 import importlib
 import logging
 from dataclasses import dataclass, field
+from functools import partial
 from types import ModuleType
 from typing import Protocol, cast
 
@@ -149,6 +150,7 @@ class InferenceGrpcService:
     ) -> _StatusReplyLike:
         """Report process liveness."""
         _ = (request, context)
+        await asyncio.sleep(0)
         return _status_reply(ok=True, status="live")
 
     async def ready(
@@ -158,7 +160,7 @@ class InferenceGrpcService:
     ) -> _StatusReplyLike:
         """Report model readiness."""
         _ = (request, context)
-        is_ready = bool(self.adapter.is_ready())
+        is_ready = bool(await asyncio.to_thread(self.adapter.is_ready))
         return _status_reply(
             ok=is_ready,
             status="ready" if is_ready else "not_ready",
@@ -175,21 +177,29 @@ class InferenceGrpcService:
         payload = bytes(request.payload)
 
         try:
-            parsed_input = parse_payload(
-                payload,
-                content_type=content_type,
-                settings=self.settings,
+            parsed_input = await asyncio.to_thread(
+                partial(
+                    parse_payload,
+                    payload,
+                    content_type=content_type,
+                    settings=self.settings,
+                )
             )
             batch_size = _batch_size(parsed_input)
             if batch_size > self.settings.max_records:
                 raise ValueError(
                     f"too_many_records: {batch_size} > {self.settings.max_records}"
                 )
-            predictions: PredictionValue = self.adapter.predict(parsed_input)
-            body, output_content_type = format_output(
-                predictions,
-                accept=accept,
-                settings=self.settings,
+            predictions: PredictionValue = await asyncio.to_thread(
+                self.adapter.predict, parsed_input
+            )
+            body, output_content_type = await asyncio.to_thread(
+                partial(
+                    format_output,
+                    predictions,
+                    accept=accept,
+                    settings=self.settings,
+                )
             )
             body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
             return _predict_reply(
@@ -205,10 +215,29 @@ class InferenceGrpcService:
             _set_grpc_error(context, grpc.StatusCode.INTERNAL, str(exc))
             return _predict_reply()
 
-    # gRPC generated service wiring expects these exact method names.
-    Live = live
-    Ready = ready
-    Predict = predict
+    async def Live(
+        self: InferenceGrpcService,
+        request: _HealthRequestLike,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+    ) -> _StatusReplyLike:
+        """PascalCase entrypoint used by generated gRPC service wiring."""
+        return await self.live(request, context)
+
+    async def Ready(
+        self: InferenceGrpcService,
+        request: _HealthRequestLike,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+    ) -> _StatusReplyLike:
+        """PascalCase entrypoint used by generated gRPC service wiring."""
+        return await self.ready(request, context)
+
+    async def Predict(
+        self: InferenceGrpcService,
+        request: _PredictRequestLike,
+        context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
+    ) -> _PredictReplyLike:
+        """PascalCase entrypoint used by generated gRPC service wiring."""
+        return await self.predict(request, context)
 
 
 def create_server(
