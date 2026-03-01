@@ -73,9 +73,13 @@ jobs:
 
           for image in "${images[@]}"; do
             name="${image##*/}"
+            archive="grype-results/${name}.oci.tar"
             out="grype-results/${name}.sarif"
 
-            ./bin/grype "podman:${image}" -o sarif --file "$out" --fail-on high
+            podman image exists "${image}"
+            podman save --format oci-archive --output "${archive}" "${image}"
+
+            ./bin/grype "oci-archive:${archive}" -o sarif --file "$out" --fail-on high
 
             test -s "$out"
           done
