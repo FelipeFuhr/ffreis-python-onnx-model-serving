@@ -176,45 +176,45 @@ run-app: ## Run the runner container
 
 .PHONY: run
 run: ## Run app locally
-	$(VENV)/bin/python main.py
+	uv run --active python main.py
 
 .PHONY: run-container
 run-container: run-app ## Alias: run the app in container
 
 .PHONY: fmt
 fmt: ## Format Python code
-	$(VENV)/bin/black .
-	$(VENV)/bin/ruff format .
+	uv run --with black python -m black .
+	uv run --with ruff python -m ruff format .
 
 .PHONY: fmt-check
 fmt-check: ## Check Python formatting
-	$(VENV)/bin/black --check .
-	$(VENV)/bin/ruff format --check .
+	uv run --with black python -m black --check .
+	uv run --with ruff python -m ruff format --check .
 
 .PHONY: lint
 lint: fmt-check ## Run linting + static typing
-	$(VENV)/bin/ruff check .
-	$(VENV)/bin/mypy src
+	uv run --with ruff python -m ruff check .
+	uv run --with mypy python -m mypy src
 
 .PHONY: test
 test: ## Run all tests
-	$(VENV)/bin/pytest -q
+	uv run --with pytest python -m pytest -q
 
 .PHONY: test-unit
 test-unit: ## Run unit tests
-	$(VENV)/bin/pytest -q tests/unit_tests
+	uv run --with pytest python -m pytest -q tests/unit_tests
 
 .PHONY: test-integration
 test-integration: ## Run integration tests
-	$(VENV)/bin/pytest -q tests/integration_tests
+	uv run --with pytest python -m pytest -q tests/integration_tests
 
 .PHONY: test-e2e
 test-e2e: ## Run e2e tests
-	$(VENV)/bin/pytest -q tests/e2e_tests
+	uv run --with pytest python -m pytest -q tests/e2e_tests
 
 .PHONY: coverage
 coverage: ## Run tests with coverage output
-	$(VENV)/bin/pytest \
+	uv run --with pytest python -m pytest \
 		-q \
 		--cov=src \
 		--cov-report=term \
@@ -222,11 +222,11 @@ coverage: ## Run tests with coverage output
 
 .PHONY: test-grpc-parity
 test-grpc-parity: ## Run gRPC/API parity tests
-	$(VENV)/bin/pytest -q tests/integration_tests/test_grpc_parity.py
+	uv run --with pytest python -m pytest -q tests/integration_tests/test_grpc_parity.py
 
 .PHONY: test-grpc-parity-property
 test-grpc-parity-property: ## Run gRPC/API parity property tests (Hypothesis)
-	$(VENV)/bin/pytest -q tests/integration_tests/test_grpc_parity.py -m property
+	uv run --with pytest python -m pytest -q tests/integration_tests/test_grpc_parity.py -m property
 
 .PHONY: smoke-api-grpc
 smoke-api-grpc: ## Run docker-compose HTTP + gRPC smoke test
