@@ -67,7 +67,6 @@ jobs:
           echo "SONAR_ORGANIZATION=${{ vars.SONAR_ORGANIZATION || 'felipefuhr' }}" >> "$GITHUB_ENV"
 
       - name: SonarQube Scan
-        if: ${{ secrets.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
         with:
           args: >
@@ -81,7 +80,3 @@ jobs:
         env:
           SONAR_HOST_URL: https://sonarcloud.io
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: Sonar token not configured
-        if: ${{ secrets.SONAR_TOKEN == '' }}
-        run: echo "SONAR_TOKEN is not set. Skipping Sonar scan."

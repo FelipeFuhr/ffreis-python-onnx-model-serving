@@ -22,7 +22,7 @@ from config import Settings
 from parsed_types import ParsedInput
 
 try:
-    from grpc import StatusCode as grpc_StatusCode
+    from grpc import StatusCode as grpc_StatusCode  # noqa: I001 - keep guarded gRPC imports grouped for optional-dependency fallback
 
     from onnx_model_serving.grpc.server import InferenceGrpcService
     from onnx_serving_grpc.inference_pb2 import (
