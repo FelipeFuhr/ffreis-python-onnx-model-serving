@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from importlib import import_module as importlib_import_module
+import importlib
 from os import path as os_path
 from typing import Protocol, Self, cast
 
@@ -57,7 +57,7 @@ class TensorflowAdapter(BaseAdapter):
             raise FileNotFoundError(f"TensorFlow model not found at: {model_path}")
 
         self._tensorflow = cast(
-            _TensorflowModule, importlib_import_module("tensorflow")
+            _TensorflowModule, importlib.import_module("tensorflow")
         )
         keras_models = self._tensorflow.keras.models
         self.model = keras_models.load_model(model_path)

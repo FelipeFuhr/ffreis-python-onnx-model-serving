@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import os
 from logging import basicConfig as logging_basicConfig
-from os import execvp as os_execvp
 
 from application import create_application
 from config import Settings
@@ -20,7 +20,7 @@ application = create_application(settings)
 
 def main() -> None:
     """Replace current process with Gunicorn server process."""
-    os_execvp(
+    os.execvp(
         "gunicorn",
         [
             "gunicorn",

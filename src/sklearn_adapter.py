@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from importlib import import_module as importlib_import_module
+import importlib
 from os import path as os_path
 from pickle import load as pickle_load
 from typing import Protocol, Self, cast
@@ -41,7 +41,7 @@ class SklearnAdapter(BaseAdapter):
     def _load_model(self: Self, model_path: str) -> _SklearnModel:
         """Load serialized model using joblib when available."""
         try:
-            joblib_module = cast(_JoblibModule, importlib_import_module("joblib"))
+            joblib_module = cast(_JoblibModule, importlib.import_module("joblib"))
             return joblib_module.load(model_path)
         except ModuleNotFoundError:
             with open(model_path, "rb") as handle:

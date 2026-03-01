@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
 from contextlib import AbstractContextManager, nullcontext
-from importlib import import_module as importlib_import_module
 from os import path as os_path
 from typing import Protocol, Self, cast
 
@@ -80,7 +80,7 @@ class PytorchAdapter(BaseAdapter):
         if not os_path.exists(model_path):
             raise FileNotFoundError(f"PyTorch model not found at: {model_path}")
 
-        self._torch = cast(_TorchModule, importlib_import_module("torch"))
+        self._torch = cast(_TorchModule, importlib.import_module("torch"))
         self.model = self._load_model(model_path)
         self.model.eval()
 
