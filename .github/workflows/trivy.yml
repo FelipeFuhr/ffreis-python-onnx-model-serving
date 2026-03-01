@@ -79,9 +79,13 @@ jobs:
 
           for image in "${images[@]}"; do
             name="${image##*/}"
+            archive="trivy-results/${name}.oci.tar"
+
+            podman image exists "${image}"
+            podman save --format oci-archive --output "${archive}" "${image}"
 
             trivy image \
-              --image-src podman \
+              --input "${archive}" \
               --skip-db-update \
               --no-progress \
               --ignorefile .trivyignore.yaml \
@@ -90,12 +94,11 @@ jobs:
               --ignore-unfixed \
               --exit-code 0 \
               --format sarif \
-              --output "trivy-results/${name}.sarif" \
-              "$image"
+              --output "trivy-results/${name}.sarif"
             test -s "trivy-results/${name}.sarif"
 
             trivy image \
-              --image-src podman \
+              --input "${archive}" \
               --skip-db-update \
               --no-progress \
               --ignorefile .trivyignore.yaml \
@@ -104,13 +107,12 @@ jobs:
               --ignore-unfixed \
               --exit-code 0 \
               --format json \
-              --output "trivy-results/${name}.json" \
-              "$image"
+              --output "trivy-results/${name}.json"
             test -s "trivy-results/${name}.json"
 
             echo "Full vulnerability report for ${image} (all severities):"
             trivy image \
-              --image-src podman \
+              --input "${archive}" \
               --skip-db-update \
               --no-progress \
               --ignorefile .trivyignore.yaml \
@@ -118,12 +120,11 @@ jobs:
               --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
               --ignore-unfixed \
               --exit-code 0 \
-              --format table \
-              "$image"
+              --format table
 
             echo "Gating ${image} on HIGH/CRITICAL vulnerabilities..."
             trivy image \
-              --image-src podman \
+              --input "${archive}" \
               --skip-db-update \
               --no-progress \
               --ignorefile .trivyignore.yaml \
@@ -131,8 +132,7 @@ jobs:
               --severity HIGH,CRITICAL \
               --ignore-unfixed \
               --exit-code 1 \
-              --format table \
-              "$image"
+              --format table
           done
 
       - name: Upload Trivy JSON reports
