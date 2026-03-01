@@ -427,3 +427,64 @@ def test_http_and_grpc_predict_property_parity_for_json_instances(
     import asyncio
 
     asyncio.run(_run())
+
+
+@pytest.mark.asyncio
+async def test_grpc_predict_uses_defaults_when_content_type_and_accept_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate gRPC predict falls back to default content-type and accept."""
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("MAX_RECORDS", "1000")
+    _patch_adapters(monkeypatch)
+
+    settings = Settings()
+    grpc_service = InferenceGrpcService(settings)
+    payload_bytes = json.dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8")
+
+    grpc_predict = await grpc_service.Predict(
+        inference_pb2.PredictRequest(
+            payload=payload_bytes,
+            content_type="",
+            accept="",
+        ),
+        None,
+    )
+
+    assert grpc_predict.content_type == "application/json"
+    assert json.loads(grpc_predict.body.decode("utf-8")) == [0, 0]
+
+
+@pytest.mark.asyncio
+async def test_swagger_routes_respect_toggle_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure /docs and /openapi.yaml are exposed only when enabled."""
+    _set_base_env(monkeypatch)
+    _patch_adapters(monkeypatch)
+
+    monkeypatch.setenv("SWAGGER_ENABLED", "false")
+    app_disabled = create_application(Settings())
+    transport_disabled = httpx.ASGITransport(app=app_disabled)
+    async with httpx.AsyncClient(
+        transport=transport_disabled,
+        base_url="http://test",
+    ) as client:
+        docs = await client.get("/docs")
+        spec = await client.get("/openapi.yaml")
+        assert docs.status_code == 404
+        assert spec.status_code == 404
+
+    monkeypatch.setenv("SWAGGER_ENABLED", "true")
+    app_enabled = create_application(Settings())
+    transport_enabled = httpx.ASGITransport(app=app_enabled)
+    async with httpx.AsyncClient(
+        transport=transport_enabled,
+        base_url="http://test",
+    ) as client:
+        docs = await client.get("/docs")
+        spec = await client.get("/openapi.yaml")
+        assert docs.status_code == 200
+        assert "SwaggerUIBundle" in docs.text
+        assert spec.status_code == 200
+        assert "openapi" in spec.text.lower()

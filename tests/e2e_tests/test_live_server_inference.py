@@ -150,9 +150,11 @@ def test_live_server_health_metrics_and_validation_errors(tmp_path: Path) -> Non
     with _temporary_environment(environment):
         with _run_live_server(base_url):
             live_response = httpx.get(f"{base_url}/live", timeout=5.0)
+            healthz_response = httpx.get(f"{base_url}/healthz", timeout=5.0)
             ready_response = httpx.get(f"{base_url}/ready", timeout=5.0)
             metrics_response = httpx.get(f"{base_url}/metrics", timeout=5.0)
             assert live_response.status_code == 200
+            assert healthz_response.status_code == 200
             assert ready_response.status_code == 200
             assert metrics_response.status_code == 200
             assert (

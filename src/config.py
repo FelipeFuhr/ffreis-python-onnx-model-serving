@@ -191,6 +191,9 @@ class Settings(BaseModel):
     prometheus_path: str = Field(
         default_factory=lambda: _env_str("PROMETHEUS_PATH", "/metrics")
     )
+    swagger_enabled: bool = Field(
+        default_factory=lambda: _env_bool("SWAGGER_ENABLED", False)
+    )
 
     otel_enabled: bool = Field(default_factory=lambda: _env_bool("OTEL_ENABLED", True))
     otel_endpoint: str = Field(

@@ -8,6 +8,8 @@ info:
     This OpenAPI document defines transport-level behavior (paths, payload media types,
     headers, and response envelopes). Model-specific tensor semantics are defined in
     a separate model manifest bundled with model artifacts.
+
+    Optional Swagger UI exposure can be enabled with `SWAGGER_ENABLED=true`.
 servers:
   - url: http://localhost:8080
     description: Local default

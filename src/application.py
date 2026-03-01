@@ -8,11 +8,12 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
 from types import TracebackType
 from typing import Literal, Protocol, cast
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
@@ -30,6 +31,29 @@ from value_types import JsonDict, PredictionValue, SpanAttributeValue
 
 log = logging.getLogger("byoc")
 _OPENAPI_ATTR = "openapi"
+_OPENAPI_CONTRACT_FILE = Path(__file__).resolve().parents[1] / "docs" / "openapi.yaml"
+_SWAGGER_UI_HTML = """<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: "/openapi.yaml",
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      presets: [SwaggerUIBundle.presets.apis],
+    });
+  </script>
+</body>
+</html>
+"""
 
 try:
     Instrumentator = importlib.import_module(
@@ -105,7 +129,11 @@ class InferenceApplicationBuilder:
         """
         self.settings = settings
         self.application = FastAPI(
-            title=settings.service_name, version=settings.service_version
+            title=settings.service_name,
+            version=settings.service_version,
+            openapi_url=None,
+            docs_url=None,
+            redoc_url=None,
         )
         self._adapter: BaseAdapter | None = None
         self._semaphore = asyncio.Semaphore(settings.max_inflight)
@@ -228,6 +256,24 @@ class InferenceApplicationBuilder:
         @self.application.post("/invocations")
         async def invocations(request: Request) -> Response:
             return await self._handle_invocation(request)
+
+        if self.settings.swagger_enabled:
+
+            @self.application.get("/openapi.yaml", include_in_schema=False)
+            def openapi_contract() -> Response:
+                if not _OPENAPI_CONTRACT_FILE.exists():
+                    return JSONResponse(
+                        {"error": "openapi_contract_not_found"}, status_code=404
+                    )
+                return PlainTextResponse(
+                    _OPENAPI_CONTRACT_FILE.read_text(encoding="utf-8"),
+                    media_type="application/yaml",
+                    status_code=200,
+                )
+
+            @self.application.get("/docs", include_in_schema=False)
+            def swagger_ui() -> HTMLResponse:
+                return HTMLResponse(_SWAGGER_UI_HTML, status_code=200)
 
     def _build_liveness_response(
         self: InferenceApplicationBuilder,

@@ -124,6 +124,50 @@ async def test_metrics_fallback_route_when_instrumentator_missing(
         assert "byoc_up 1" in response.text
 
 
+@pytest.mark.asyncio
+async def test_swagger_routes_are_disabled_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep docs routes disabled unless explicitly enabled."""
+    monkeypatch.delenv("SWAGGER_ENABLED", raising=False)
+    monkeypatch.setenv("OTEL_ENABLED", "false")
+    monkeypatch.setenv("PROMETHEUS_ENABLED", "false")
+
+    settings = Settings()
+    assert settings.swagger_enabled is False
+
+    application = create_application(settings)
+    transport = httpx.ASGITransport(app=application)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        docs = await client.get("/docs")
+        spec = await client.get("/openapi.yaml")
+        assert docs.status_code == 404
+        assert spec.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_swagger_routes_are_enabled_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expose docs routes only when SWAGGER_ENABLED=true."""
+    monkeypatch.setenv("SWAGGER_ENABLED", "true")
+    monkeypatch.setenv("OTEL_ENABLED", "false")
+    monkeypatch.setenv("PROMETHEUS_ENABLED", "false")
+
+    settings = Settings()
+    assert settings.swagger_enabled is True
+
+    application = create_application(settings)
+    transport = httpx.ASGITransport(app=application)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        docs = await client.get("/docs")
+        spec = await client.get("/openapi.yaml")
+        assert docs.status_code == 200
+        assert "SwaggerUIBundle" in docs.text
+        assert spec.status_code == 200
+        assert "openapi: 3.1.0" in spec.text
+
+
 class TestAppEndpoints:
     """Test suite for TestAppEndpoints."""
 

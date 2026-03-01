@@ -160,6 +160,12 @@ grpc-check: ## Verify protobuf/gRPC stubs are up to date
 openapi-check: ## Validate OpenAPI contract and verify runtime drift
 	PYTHONPATH=src env -u VIRTUAL_ENV uv run --project . --with openapi-spec-validator --with pyyaml python scripts/check_openapi.py
 
+.PHONY: openapi-drift-check
+openapi-drift-check: ## Ensure API changes are accompanied by OpenAPI updates
+	@test -n "$(BASE_SHA)" || (echo "BASE_SHA is required" && exit 1)
+	@test -n "$(HEAD_SHA)" || (echo "HEAD_SHA is required" && exit 1)
+	python3 scripts/check_openapi_drift.py --base "$(BASE_SHA)" --head "$(HEAD_SHA)"
+
 .PHONY: grpc-clean
 grpc-clean: ## Remove generated protobuf/gRPC stubs
 	rm -f src/onnx_serving_grpc/inference_pb2.py src/onnx_serving_grpc/inference_pb2_grpc.py
