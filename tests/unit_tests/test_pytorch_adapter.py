@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-import types
 from pathlib import Path
+from types import SimpleNamespace as types_SimpleNamespace
 from typing import Any, Self, cast
 
-import numpy as np
-import pytest
+from numpy import asarray as np_asarray
+from numpy import float32 as np_float32
+from numpy import floating as np_floating
+from numpy import issubdtype as np_issubdtype
+from numpy import ndarray as np_ndarray
+from pytest import MonkeyPatch as pytest_MonkeyPatch
+from pytest import mark as pytest_mark
+from pytest import raises as pytest_raises
 
 from config import Settings
 from parsed_types import ParsedInput
 from pytorch_adapter import PytorchAdapter
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest_mark.unit
 
 
 class _NoGrad:
@@ -34,15 +40,15 @@ class _NoGrad:
 class _FakeTensor:
     """Small tensor-like wrapper for adapter conversion tests."""
 
-    def __init__(self: Self, array: np.ndarray) -> None:
+    def __init__(self: Self, array: np_ndarray) -> None:
         self._array = array
-        self.dtype = types.SimpleNamespace(
-            is_floating_point=bool(np.issubdtype(array.dtype, np.floating))
+        self.dtype = types_SimpleNamespace(
+            is_floating_point=bool(np_issubdtype(array.dtype, np_floating))
         )
 
     def to(self: Self, dtype: object) -> _FakeTensor:
         _ = dtype
-        return _FakeTensor(self._array.astype(np.float32, copy=False))
+        return _FakeTensor(self._array.astype(np_float32, copy=False))
 
     def detach(self: Self) -> _FakeTensor:
         return self
@@ -50,7 +56,7 @@ class _FakeTensor:
     def cpu(self: Self) -> _FakeTensor:
         return self
 
-    def numpy(self: Self) -> np.ndarray:
+    def numpy(self: Self) -> np_ndarray:
         return self._array
 
 
@@ -61,7 +67,7 @@ class _FakeModel:
         return None
 
     def __call__(self: Self, tensor: _FakeTensor) -> _FakeTensor:
-        arr = tensor.numpy().astype(np.float32)
+        arr = tensor.numpy().astype(np_float32)
         summed = arr.sum(axis=1, keepdims=True)
         return _FakeTensor(summed)
 
@@ -73,21 +79,21 @@ class _FakeNestedModel:
         return None
 
     def __call__(self: Self, tensor: _FakeTensor) -> object:
-        summed = tensor.numpy().sum(axis=1, keepdims=True).astype(np.float32)
+        summed = tensor.numpy().sum(axis=1, keepdims=True).astype(np_float32)
         return {
             "predictions": _FakeTensor(summed),
-            "details": (_FakeTensor(summed), np.float32(7.0)),
+            "details": (_FakeTensor(summed), np_float32(7.0)),
         }
 
 
 def _fake_torch_module() -> object:
     """Build a fake torch module object."""
-    return types.SimpleNamespace(
+    return types_SimpleNamespace(
         Tensor=_FakeTensor,
         float32="float32",
-        jit=types.SimpleNamespace(load=lambda _path, map_location=None: _FakeModel()),
+        jit=types_SimpleNamespace(load=lambda _path, map_location=None: _FakeModel()),
         load=lambda _path, map_location=None: _FakeModel(),
-        as_tensor=lambda array: _FakeTensor(np.asarray(array)),
+        as_tensor=lambda array: _FakeTensor(np_asarray(array)),
         no_grad=lambda: _NoGrad(),
     )
 
@@ -96,7 +102,7 @@ class TestPytorchAdapter:
     """Test suite for pytorch adapter behavior."""
 
     def test_predicts_from_tabular_input(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Predict from ParsedInput.X with fake torch module."""
         model_path = tmp_path / "model.pt"
@@ -113,12 +119,12 @@ class TestPytorchAdapter:
         adapter = PytorchAdapter(Settings())
 
         result = adapter.predict(
-            ParsedInput(X=np.asarray([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+            ParsedInput(X=np_asarray([[1, 2, 3], [4, 5, 6]], dtype=np_float32))
         )
         assert result == [[6.0], [15.0]]
 
     def test_predict_raises_for_empty_payload(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Raise validation error when neither X nor tensors are provided."""
         model_path = tmp_path / "model.pt"
@@ -134,13 +140,13 @@ class TestPytorchAdapter:
         monkeypatch.setenv("MODEL_TYPE", "pytorch")
         adapter = PytorchAdapter(Settings())
 
-        with pytest.raises(
+        with pytest_raises(
             ValueError, match="requires ParsedInput.X or ParsedInput.tensors"
         ):
             adapter.predict(ParsedInput())
 
     def test_predict_rejects_invalid_parsed_input(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Raise type error when parsed input object is invalid."""
         model_path = tmp_path / "model.pt"
@@ -156,11 +162,11 @@ class TestPytorchAdapter:
         monkeypatch.setenv("MODEL_TYPE", "pytorch")
         adapter = PytorchAdapter(Settings())
 
-        with pytest.raises(TypeError, match="PyTorch adapter expects ParsedInput"):
+        with pytest_raises(TypeError, match="PyTorch adapter expects ParsedInput"):
             adapter.predict(cast(Any, object()))
 
     def test_load_falls_back_to_torch_load(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Fallback to torch.load when jit.load raises."""
         model_path = tmp_path / "model.pt"
@@ -171,7 +177,7 @@ class TestPytorchAdapter:
             float32 = "float32"
 
             def __init__(self: Self) -> None:
-                self.jit = types.SimpleNamespace(load=self._jit_load)
+                self.jit = types_SimpleNamespace(load=self._jit_load)
 
             def _jit_load(self: Self, _path: str, map_location: str = "cpu") -> object:
                 _ = map_location
@@ -181,8 +187,8 @@ class TestPytorchAdapter:
                 _ = map_location
                 return _FakeModel()
 
-            def as_tensor(self: Self, array: np.ndarray) -> _FakeTensor:
-                return _FakeTensor(np.asarray(array))
+            def as_tensor(self: Self, array: np_ndarray) -> _FakeTensor:
+                return _FakeTensor(np_asarray(array))
 
             def no_grad(self: Self) -> _NoGrad:
                 return _NoGrad()
@@ -197,12 +203,12 @@ class TestPytorchAdapter:
         monkeypatch.setenv("MODEL_TYPE", "pytorch")
         adapter = PytorchAdapter(Settings())
         result = adapter.predict(
-            ParsedInput(tensors={"x": np.asarray([1.0, 2.0, 3.0], dtype=np.float32)})
+            ParsedInput(tensors={"x": np_asarray([1.0, 2.0, 3.0], dtype=np_float32)})
         )
         assert result == [[6.0]]
 
     def test_converts_nested_outputs_and_supports_missing_no_grad(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Cover recursive output conversion and nullcontext fallback."""
         model_path = tmp_path / "model.pt"
@@ -211,11 +217,11 @@ class TestPytorchAdapter:
         class _TorchNoGradMissing:
             Tensor = _FakeTensor
             float32 = "float32"
-            jit = types.SimpleNamespace(
+            jit = types_SimpleNamespace(
                 load=lambda _path, map_location=None: _FakeNestedModel()
             )
             load = staticmethod(lambda _path, map_location=None: _FakeNestedModel())
-            as_tensor = staticmethod(lambda array: _FakeTensor(np.asarray(array)))
+            as_tensor = staticmethod(lambda array: _FakeTensor(np_asarray(array)))
 
         def _fake_import_module(name: str) -> object:
             if name == "torch":
@@ -227,6 +233,6 @@ class TestPytorchAdapter:
         monkeypatch.setenv("MODEL_TYPE", "pytorch")
         adapter = PytorchAdapter(Settings())
         result = adapter.predict(
-            ParsedInput(X=np.asarray([[1, 2, 3]], dtype=np.float32))
+            ParsedInput(X=np_asarray([[1, 2, 3]], dtype=np_float32))
         )
         assert result == {"details": [[[6.0]], 7.0], "predictions": [[6.0]]}

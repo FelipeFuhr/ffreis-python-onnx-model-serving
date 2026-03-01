@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-import importlib
-import logging
-import time
+from asyncio import Semaphore as asyncio_Semaphore
+from asyncio import wait_for as asyncio_wait_for
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+from importlib import import_module as importlib_import_module
+from logging import getLogger as logging_getLogger
 from pathlib import Path
+from time import time as time_time
 from types import TracebackType
 from typing import Literal, Protocol, cast
 
@@ -29,7 +30,7 @@ from telemetry import (
 )
 from value_types import JsonDict, PredictionValue, SpanAttributeValue
 
-log = logging.getLogger("byoc")
+log = logging_getLogger("byoc")
 _OPENAPI_ATTR = "openapi"
 _OPENAPI_CONTRACT_FILE = Path(__file__).resolve().parents[1] / "docs" / "openapi.yaml"
 _SWAGGER_UI_HTML = """<!doctype html>
@@ -56,7 +57,7 @@ _SWAGGER_UI_HTML = """<!doctype html>
 """
 
 try:
-    Instrumentator = importlib.import_module(
+    Instrumentator = importlib_import_module(
         "prometheus_fastapi_instrumentator"
     ).Instrumentator
 except Exception:  # pragma: no cover - optional dependency
@@ -136,7 +137,7 @@ class InferenceApplicationBuilder:
             redoc_url=None,
         )
         self._adapter: BaseAdapter | None = None
-        self._semaphore = asyncio.Semaphore(settings.max_inflight)
+        self._semaphore = asyncio_Semaphore(settings.max_inflight)
 
     def build(self: InferenceApplicationBuilder) -> FastAPI:
         """Build and return configured FastAPI application."""
@@ -339,7 +340,7 @@ class InferenceApplicationBuilder:
         if not acquired:
             return JSONResponse({"error": "too_many_requests"}, status_code=429)
 
-        start_time = time.time()
+        start_time = time_time()
         try:
             return await self._run_inference(request=request, start_time=start_time)
         except ValueError as error:
@@ -355,7 +356,7 @@ class InferenceApplicationBuilder:
     async def _try_acquire_request_slot(self: InferenceApplicationBuilder) -> bool:
         """Try to acquire one concurrency slot within timeout."""
         try:
-            await asyncio.wait_for(
+            await asyncio_wait_for(
                 self._semaphore.acquire(),
                 timeout=self.settings.acquire_timeout_s,
             )
@@ -407,7 +408,7 @@ class InferenceApplicationBuilder:
                 settings=self.settings,
             )
             span.set_attribute("response.content_type", output_content_type)
-            span.set_attribute("latency_ms", (time.time() - start_time) * 1000.0)
+            span.set_attribute("latency_ms", (time_time() - start_time) * 1000.0)
             response = Response(
                 content=body, media_type=output_content_type, status_code=200
             )

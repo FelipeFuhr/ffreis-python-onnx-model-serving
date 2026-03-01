@@ -2,30 +2,46 @@
 
 from __future__ import annotations
 
-import json
-import os
+from asyncio import run as asyncio_run
 from dataclasses import dataclass
+from json import dumps as json_dumps
+from json import loads as json_loads
+from os import getenv as os_getenv
 from typing import Any, cast
 
-import httpx
-import pytest
+from httpx import ASGITransport as httpx_ASGITransport
+from httpx import AsyncClient as httpx_AsyncClient
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from pytest import MonkeyPatch as pytest_MonkeyPatch
+from pytest import mark as pytest_mark
+from pytest import skip as pytest_skip
 
 from application import create_application
 from config import Settings
 from parsed_types import ParsedInput
 
 try:
-    import grpc
+    from grpc import StatusCode as grpc_StatusCode
 
-    import onnx_serving_grpc.inference_pb2 as inference_pb2
     from onnx_model_serving.grpc.server import InferenceGrpcService
+    from onnx_serving_grpc.inference_pb2 import DESCRIPTOR as inference_pb2_DESCRIPTOR
+    from onnx_serving_grpc.inference_pb2 import LiveRequest as inference_pb2_LiveRequest
+    from onnx_serving_grpc.inference_pb2 import (
+        PredictReply as inference_pb2_PredictReply,
+    )
+    from onnx_serving_grpc.inference_pb2 import (
+        PredictRequest as inference_pb2_PredictRequest,
+    )
+    from onnx_serving_grpc.inference_pb2 import (
+        ReadyRequest as inference_pb2_ReadyRequest,
+    )
+    from onnx_serving_grpc.inference_pb2 import StatusReply as inference_pb2_StatusReply
 except (ImportError, ModuleNotFoundError) as exc:
-    pytest.skip(f"grpc parity dependencies unavailable: {exc}", allow_module_level=True)
+    pytest_skip(f"grpc parity dependencies unavailable: {exc}", allow_module_level=True)
 
-pytestmark = pytest.mark.integration
-_HYPOTHESIS_MAX_EXAMPLES = int(os.getenv("HYPOTHESIS_MAX_EXAMPLES", "30"))
+pytestmark = pytest_mark.integration
+_HYPOTHESIS_MAX_EXAMPLES = int(os_getenv("HYPOTHESIS_MAX_EXAMPLES", "30"))
 
 _HTTP_TO_GRPC_SURFACE_MAP: dict[str, str] = {
     "/live": "Live",
@@ -75,7 +91,7 @@ class _RecordingContext:
         self.details = details
 
 
-def _set_base_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _set_base_env(monkeypatch: pytest_MonkeyPatch) -> None:
     """Set baseline environment variables for parity tests."""
     monkeypatch.setenv("OTEL_ENABLED", "false")
     monkeypatch.setenv("PROMETHEUS_ENABLED", "false")
@@ -87,7 +103,7 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TABULAR_DTYPE", "float32")
 
 
-def _patch_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_adapters(monkeypatch: pytest_MonkeyPatch) -> None:
     """Patch both HTTP and gRPC loaders to use deterministic adapter."""
     import application as application_module
     import onnx_model_serving.grpc.server as grpc_server_module
@@ -106,7 +122,7 @@ def _patch_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _grpc_method_names() -> set[str]:
     """Return gRPC method names from protobuf service descriptor."""
-    service = inference_pb2.DESCRIPTOR.services_by_name["InferenceService"]
+    service = inference_pb2_DESCRIPTOR.services_by_name["InferenceService"]
     return {method.name for method in service.methods}
 
 
@@ -117,7 +133,7 @@ def _http_route_paths(application: object) -> set[str]:
 
 
 def test_surface_parity_http_to_grpc_map_is_exhaustive(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Fail when HTTP/gRPC surfaces diverge without explicit mapping."""
     _set_base_env(monkeypatch)
@@ -137,10 +153,10 @@ def test_surface_parity_http_to_grpc_map_is_exhaustive(
 def test_schema_mapping_predict_fields_are_explicit() -> None:
     """Keep explicit translation table between HTTP and gRPC Predict fields."""
     grpc_predict_request_fields = set(
-        inference_pb2.PredictRequest.DESCRIPTOR.fields_by_name.keys()
+        inference_pb2_PredictRequest.DESCRIPTOR.fields_by_name.keys()
     )
     grpc_predict_reply_fields = set(
-        inference_pb2.PredictReply.DESCRIPTOR.fields_by_name.keys()
+        inference_pb2_PredictReply.DESCRIPTOR.fields_by_name.keys()
     )
 
     expected_request_mapping = {
@@ -160,17 +176,17 @@ def test_schema_mapping_predict_fields_are_explicit() -> None:
 
 def test_grpc_contract_for_predict_messages() -> None:
     """Validate gRPC I/O contract fields for predict RPC."""
-    request_fields = set(inference_pb2.PredictRequest.DESCRIPTOR.fields_by_name.keys())
-    reply_fields = set(inference_pb2.PredictReply.DESCRIPTOR.fields_by_name.keys())
-    status_fields = set(inference_pb2.StatusReply.DESCRIPTOR.fields_by_name.keys())
+    request_fields = set(inference_pb2_PredictRequest.DESCRIPTOR.fields_by_name.keys())
+    reply_fields = set(inference_pb2_PredictReply.DESCRIPTOR.fields_by_name.keys())
+    status_fields = set(inference_pb2_StatusReply.DESCRIPTOR.fields_by_name.keys())
 
     assert request_fields == {"payload", "content_type", "accept"}
     assert reply_fields == {"body", "content_type", "metadata"}
     assert status_fields == {"ok", "status"}
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
+@pytest_mark.asyncio
+@pytest_mark.parametrize(
     "instances",
     [
         [[1.0, 2.0]],
@@ -179,7 +195,7 @@ def test_grpc_contract_for_predict_messages() -> None:
     ],
 )
 async def test_http_and_grpc_predict_parity_across_batches(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
     instances: list[list[float]],
 ) -> None:
     """Compare HTTP and gRPC outputs for multiple valid payload shapes."""
@@ -191,10 +207,10 @@ async def test_http_and_grpc_predict_parity_across_batches(
     app = create_application(settings)
     grpc_service = InferenceGrpcService(settings)
     payload_obj = {"instances": instances}
-    payload_bytes = json.dumps(payload_obj).encode("utf-8")
+    payload_bytes = json_dumps(payload_obj).encode("utf-8")
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    transport = httpx_ASGITransport(app=app)
+    async with httpx_AsyncClient(transport=transport, base_url="http://test") as client:
         live_response = await client.get("/live")
         healthz_response = await client.get("/healthz")
         ready_response = await client.get("/ready")
@@ -205,10 +221,10 @@ async def test_http_and_grpc_predict_parity_across_batches(
             headers={"content-type": "application/json", "accept": "application/json"},
         )
 
-    grpc_live = await grpc_service.Live(inference_pb2.LiveRequest(), None)
-    grpc_ready = await grpc_service.Ready(inference_pb2.ReadyRequest(), None)
+    grpc_live = await grpc_service.Live(inference_pb2_LiveRequest(), None)
+    grpc_ready = await grpc_service.Ready(inference_pb2_ReadyRequest(), None)
     grpc_predict = await grpc_service.Predict(
-        inference_pb2.PredictRequest(
+        inference_pb2_PredictRequest(
             payload=payload_bytes,
             content_type="application/json",
             accept="application/json",
@@ -225,14 +241,14 @@ async def test_http_and_grpc_predict_parity_across_batches(
     assert grpc_ready.ok is True
     assert grpc_predict.content_type == "application/json"
 
-    http_json = json.loads(http_response.content.decode("utf-8"))
-    grpc_json = json.loads(grpc_predict.body.decode("utf-8"))
+    http_json = json_loads(http_response.content.decode("utf-8"))
+    grpc_json = json_loads(grpc_predict.body.decode("utf-8"))
     assert http_json == grpc_json
 
 
-@pytest.mark.asyncio
+@pytest_mark.asyncio
 async def test_error_parity_for_invalid_json_input(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Validate invalid JSON maps to equivalent HTTP/gRPC error semantics."""
     _set_base_env(monkeypatch)
@@ -244,8 +260,8 @@ async def test_error_parity_for_invalid_json_input(
     grpc_service = InferenceGrpcService(settings)
     bad_payload = b"{not-json"
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    transport = httpx_ASGITransport(app=app)
+    async with httpx_AsyncClient(transport=transport, base_url="http://test") as client:
         http_response = await client.post(
             "/invocations",
             content=bad_payload,
@@ -254,7 +270,7 @@ async def test_error_parity_for_invalid_json_input(
 
     context = _RecordingContext()
     grpc_reply = await grpc_service.Predict(
-        inference_pb2.PredictRequest(
+        inference_pb2_PredictRequest(
             payload=bad_payload,
             content_type="application/json",
             accept="application/json",
@@ -263,14 +279,14 @@ async def test_error_parity_for_invalid_json_input(
     )
 
     assert http_response.status_code == 400
-    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert context.code == grpc_StatusCode.INVALID_ARGUMENT
     assert context.details is not None
     assert grpc_reply.body == b""
 
 
-@pytest.mark.asyncio
+@pytest_mark.asyncio
 async def test_error_parity_for_record_limit_exceeded(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Validate batch-limit violations map to equivalent error category."""
     _set_base_env(monkeypatch)
@@ -280,10 +296,10 @@ async def test_error_parity_for_record_limit_exceeded(
     settings = Settings()
     app = create_application(settings)
     grpc_service = InferenceGrpcService(settings)
-    payload_bytes = json.dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8")
+    payload_bytes = json_dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8")
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    transport = httpx_ASGITransport(app=app)
+    async with httpx_AsyncClient(transport=transport, base_url="http://test") as client:
         http_response = await client.post(
             "/invocations",
             content=payload_bytes,
@@ -292,7 +308,7 @@ async def test_error_parity_for_record_limit_exceeded(
 
     context = _RecordingContext()
     await grpc_service.Predict(
-        inference_pb2.PredictRequest(
+        inference_pb2_PredictRequest(
             payload=payload_bytes,
             content_type="application/json",
             accept="application/json",
@@ -302,25 +318,25 @@ async def test_error_parity_for_record_limit_exceeded(
 
     assert http_response.status_code == 400
     assert "too_many_records" in http_response.json()["error"]
-    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert context.code == grpc_StatusCode.INVALID_ARGUMENT
     assert context.details is not None
     assert "too_many_records" in context.details
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
+@pytest_mark.asyncio
+@pytest_mark.parametrize(
     ("payload", "content_type", "accept"),
     [
         (b"1,2\n3,4\n", "text/csv", "application/json"),
         (
-            json.dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8"),
+            json_dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8"),
             "application/json",
             "application/json",
         ),
     ],
 )
 async def test_http_and_grpc_predict_parity_for_multiple_content_types(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
     payload: bytes,
     content_type: str,
     accept: str,
@@ -334,8 +350,8 @@ async def test_http_and_grpc_predict_parity_for_multiple_content_types(
     app = create_application(settings)
     grpc_service = InferenceGrpcService(settings)
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    transport = httpx_ASGITransport(app=app)
+    async with httpx_AsyncClient(transport=transport, base_url="http://test") as client:
         http_response = await client.post(
             "/invocations",
             content=payload,
@@ -343,7 +359,7 @@ async def test_http_and_grpc_predict_parity_for_multiple_content_types(
         )
 
     grpc_predict = await grpc_service.Predict(
-        inference_pb2.PredictRequest(
+        inference_pb2_PredictRequest(
             payload=payload,
             content_type=content_type,
             accept=accept,
@@ -353,35 +369,46 @@ async def test_http_and_grpc_predict_parity_for_multiple_content_types(
 
     assert http_response.status_code == 200
     assert grpc_predict.content_type == "application/json"
-    assert json.loads(http_response.content.decode("utf-8")) == json.loads(
+    assert json_loads(http_response.content.decode("utf-8")) == json_loads(
         grpc_predict.body.decode("utf-8")
     )
 
 
-@pytest.mark.property
+@st.composite
+def _rectangular_instances(
+    draw: st.DrawFn,
+) -> list[list[float]]:
+    row_count = draw(st.integers(min_value=1, max_value=12))
+    col_count = draw(st.integers(min_value=1, max_value=8))
+    return draw(
+        st.lists(
+            st.lists(
+                st.floats(
+                    min_value=-1_000.0,
+                    max_value=1_000.0,
+                    allow_nan=False,
+                    allow_infinity=False,
+                ),
+                min_size=col_count,
+                max_size=col_count,
+            ),
+            min_size=row_count,
+            max_size=row_count,
+        )
+    )
+
+
+@pytest_mark.property
 @settings(
     max_examples=_HYPOTHESIS_MAX_EXAMPLES,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(
-    instances=st.lists(
-        st.lists(
-            st.floats(
-                min_value=-1_000.0,
-                max_value=1_000.0,
-                allow_nan=False,
-                allow_infinity=False,
-            ),
-            min_size=1,
-            max_size=8,
-        ),
-        min_size=1,
-        max_size=12,
-    ),
+    instances=_rectangular_instances(),
 )
 def test_http_and_grpc_predict_property_parity_for_json_instances(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
     instances: list[list[float]],
 ) -> None:
     """Property check: valid JSON batches produce equivalent HTTP/gRPC predictions."""
@@ -394,10 +421,10 @@ def test_http_and_grpc_predict_property_parity_for_json_instances(
         settings_obj = Settings()
         app = create_application(settings_obj)
         grpc_service = InferenceGrpcService(settings_obj)
-        payload_bytes = json.dumps({"instances": instances}).encode("utf-8")
+        payload_bytes = json_dumps({"instances": instances}).encode("utf-8")
 
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
+        transport = httpx_ASGITransport(app=app)
+        async with httpx_AsyncClient(
             transport=transport, base_url="http://test"
         ) as client:
             http_response = await client.post(
@@ -410,7 +437,7 @@ def test_http_and_grpc_predict_property_parity_for_json_instances(
             )
 
         grpc_predict = await grpc_service.Predict(
-            inference_pb2.PredictRequest(
+            inference_pb2_PredictRequest(
                 payload=payload_bytes,
                 content_type="application/json",
                 accept="application/json",
@@ -420,18 +447,16 @@ def test_http_and_grpc_predict_property_parity_for_json_instances(
 
         assert http_response.status_code == 200
         assert grpc_predict.content_type == "application/json"
-        assert json.loads(http_response.content.decode("utf-8")) == json.loads(
+        assert json_loads(http_response.content.decode("utf-8")) == json_loads(
             grpc_predict.body.decode("utf-8")
         )
 
-    import asyncio
-
-    asyncio.run(_run())
+    asyncio_run(_run())
 
 
-@pytest.mark.asyncio
+@pytest_mark.asyncio
 async def test_grpc_predict_uses_defaults_when_content_type_and_accept_missing(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Validate gRPC predict falls back to default content-type and accept."""
     _set_base_env(monkeypatch)
@@ -440,10 +465,10 @@ async def test_grpc_predict_uses_defaults_when_content_type_and_accept_missing(
 
     settings = Settings()
     grpc_service = InferenceGrpcService(settings)
-    payload_bytes = json.dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8")
+    payload_bytes = json_dumps({"instances": [[1.0, 2.0], [3.0, 4.0]]}).encode("utf-8")
 
     grpc_predict = await grpc_service.Predict(
-        inference_pb2.PredictRequest(
+        inference_pb2_PredictRequest(
             payload=payload_bytes,
             content_type="",
             accept="",
@@ -452,12 +477,12 @@ async def test_grpc_predict_uses_defaults_when_content_type_and_accept_missing(
     )
 
     assert grpc_predict.content_type == "application/json"
-    assert json.loads(grpc_predict.body.decode("utf-8")) == [0, 0]
+    assert json_loads(grpc_predict.body.decode("utf-8")) == [0, 0]
 
 
-@pytest.mark.asyncio
+@pytest_mark.asyncio
 async def test_swagger_routes_respect_toggle_flag(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Ensure /docs and /openapi.yaml are exposed only when enabled."""
     _set_base_env(monkeypatch)
@@ -465,8 +490,8 @@ async def test_swagger_routes_respect_toggle_flag(
 
     monkeypatch.setenv("SWAGGER_ENABLED", "false")
     app_disabled = create_application(Settings())
-    transport_disabled = httpx.ASGITransport(app=app_disabled)
-    async with httpx.AsyncClient(
+    transport_disabled = httpx_ASGITransport(app=app_disabled)
+    async with httpx_AsyncClient(
         transport=transport_disabled,
         base_url="http://test",
     ) as client:
@@ -477,8 +502,8 @@ async def test_swagger_routes_respect_toggle_flag(
 
     monkeypatch.setenv("SWAGGER_ENABLED", "true")
     app_enabled = create_application(Settings())
-    transport_enabled = httpx.ASGITransport(app=app_enabled)
-    async with httpx.AsyncClient(
+    transport_enabled = httpx_ASGITransport(app=app_enabled)
+    async with httpx_AsyncClient(
         transport=transport_enabled,
         base_url="http://test",
     ) as client:

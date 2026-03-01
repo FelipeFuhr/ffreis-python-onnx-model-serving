@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-import importlib
-import json
-import os
+from importlib import import_module as importlib_import_module
+from json import loads as json_loads
+from os import path as os_path
 from typing import Protocol, cast
 
-import numpy as np
+from numpy import asarray as np_asarray
+from numpy import float32 as np_float32
+from numpy import floating as np_floating
+from numpy import int64 as np_int64
+from numpy import integer as np_integer
+from numpy import issubdtype as np_issubdtype
+from numpy import ndarray as np_ndarray
 
 from base_adapter import BaseAdapter
 from config import Settings
@@ -35,16 +41,16 @@ class OnnxAdapter(BaseAdapter):
 
     def _load(self: OnnxAdapter) -> None:
         """Load ONNX model and runtime session from disk."""
-        onnxruntime_module = importlib.import_module("onnxruntime")
+        onnxruntime_module = importlib_import_module("onnxruntime")
         session_options = onnxruntime_module.SessionOptions()
 
         model_filename = self.settings.model_filename
         if model_filename:
-            model_filename = os.path.basename(model_filename)
+            model_filename = os_path.basename(model_filename)
         if not model_filename:
             model_filename = "model.onnx"
-        path = os.path.join(self.settings.model_dir, model_filename)
-        if not os.path.exists(path):
+        path = os_path.join(self.settings.model_dir, model_filename)
+        if not os_path.exists(path):
             raise FileNotFoundError(f"ONNX model not found: {path}")
 
         providers = [
@@ -81,7 +87,7 @@ class OnnxAdapter(BaseAdapter):
         self.output_names = [item.name for item in session.get_outputs()]
 
         if self.settings.onnx_output_map_json:
-            raw_output_map = json.loads(self.settings.onnx_output_map_json)
+            raw_output_map = json_loads(self.settings.onnx_output_map_json)
             if not isinstance(raw_output_map, dict):
                 raise ValueError("ONNX_OUTPUT_MAP_JSON must be a JSON object")
             self._output_map = {
@@ -97,7 +103,7 @@ class OnnxAdapter(BaseAdapter):
             and self.output_names is not None
         )
 
-    def _coerce(self: OnnxAdapter, arr: np.ndarray) -> np.ndarray:
+    def _coerce(self: OnnxAdapter, arr: np_ndarray) -> np_ndarray:
         """Coerce arrays to common ONNX numeric dtypes.
 
         Parameters
@@ -110,10 +116,10 @@ class OnnxAdapter(BaseAdapter):
         numpy.ndarray
             Cast array.
         """
-        if np.issubdtype(arr.dtype, np.floating):
-            return arr.astype(np.float32, copy=False)
-        if np.issubdtype(arr.dtype, np.integer):
-            return arr.astype(np.int64, copy=False)
+        if np_issubdtype(arr.dtype, np_floating):
+            return arr.astype(np_float32, copy=False)
+        if np_issubdtype(arr.dtype, np_integer):
+            return arr.astype(np_int64, copy=False)
         return arr
 
     def predict(self: OnnxAdapter, parsed_input: ParsedInput) -> PredictionValue:
@@ -139,25 +145,25 @@ class OnnxAdapter(BaseAdapter):
 
     def _build_feed(
         self: OnnxAdapter, parsed_input: ParsedInput
-    ) -> dict[str, np.ndarray]:
+    ) -> dict[str, np_ndarray]:
         """Build ONNX feed dictionary from parsed input."""
         if parsed_input.tensors is not None:
             return {
-                key: self._coerce(np.asarray(value))
+                key: self._coerce(np_asarray(value))
                 for key, value in parsed_input.tensors.items()
             }
         if parsed_input.X is None:
             raise ValueError(
                 "ONNX adapter requires ParsedInput.X or ParsedInput.tensors"
             )
-        features = self._coerce(np.asarray(parsed_input.X))
+        features = self._coerce(np_asarray(parsed_input.X))
         input_names = self.input_names
         if not input_names:
             raise RuntimeError("ONNX adapter input metadata is unavailable")
         return {self.settings.onnx_input_name or input_names[0]: features}
 
     def _predict_with_output_map(
-        self: OnnxAdapter, feed: dict[str, np.ndarray]
+        self: OnnxAdapter, feed: dict[str, np_ndarray]
     ) -> JsonDict:
         """Run inference and map outputs according to configured aliases."""
         output_map = self._output_map
@@ -177,8 +183,8 @@ class OnnxAdapter(BaseAdapter):
         return mapped_outputs
 
     def _predict_single_output(
-        self: OnnxAdapter, feed: dict[str, np.ndarray]
-    ) -> np.ndarray:
+        self: OnnxAdapter, feed: dict[str, np_ndarray]
+    ) -> np_ndarray:
         """Run inference and return a single configured output tensor."""
         session = self.session
         output_names = self.output_names
@@ -211,6 +217,6 @@ class _OnnxSessionProtocol(Protocol):
     def run(
         self: _OnnxSessionProtocol,
         output_names: list[str],
-        feed: dict[str, np.ndarray],
-    ) -> list[np.ndarray]:
+        feed: dict[str, np_ndarray],
+    ) -> list[np_ndarray]:
         """Run inference for output names and input feed."""

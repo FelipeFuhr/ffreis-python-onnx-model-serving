@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import numpy as np
+from numpy import ndarray as np_ndarray
 from pydantic import BaseModel, ConfigDict
 
 from value_types import MetadataValue
@@ -23,8 +23,8 @@ class ParsedInput(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    X: np.ndarray | None = None
-    tensors: dict[str, np.ndarray] | None = None
+    X: np_ndarray | None = None
+    tensors: dict[str, np_ndarray] | None = None
     meta: dict[str, MetadataValue] | None = None
 
 

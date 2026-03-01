@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-import asyncio
-import types
+from asyncio import run as asyncio_run
+from types import SimpleNamespace as types_SimpleNamespace
 
-import numpy as np
-import pytest
+from numpy import array as np_array
+from numpy import float32 as np_float32
+from numpy import zeros as np_zeros
+from pytest import MonkeyPatch as pytest_MonkeyPatch
+from pytest import raises as pytest_raises
+from pytest import skip as pytest_skip
 
 from config import Settings
 from parsed_types import ParsedInput
 
 try:
-    import grpc
+    from grpc import StatusCode as grpc_StatusCode
 except ModuleNotFoundError as exc:  # pragma: no cover
-    pytest.skip(f"grpc dependencies unavailable: {exc}", allow_module_level=True)
+    pytest_skip(f"grpc dependencies unavailable: {exc}", allow_module_level=True)
 
 
 class _AdapterStub:
@@ -52,7 +56,7 @@ def test_set_grpc_error_handles_none_context() -> None:
     """No-op when context is None."""
     import onnx_model_serving.grpc.server as module
 
-    module._set_grpc_error(None, grpc.StatusCode.INTERNAL, "boom")
+    module._set_grpc_error(None, grpc_StatusCode.INTERNAL, "boom")
 
 
 def test_set_grpc_error_sets_code_and_details() -> None:
@@ -60,8 +64,8 @@ def test_set_grpc_error_sets_code_and_details() -> None:
     import onnx_model_serving.grpc.server as module
 
     context = _ContextRecorder()
-    module._set_grpc_error(context, grpc.StatusCode.INVALID_ARGUMENT, "bad")
-    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    module._set_grpc_error(context, grpc_StatusCode.INVALID_ARGUMENT, "bad")
+    assert context.code == grpc_StatusCode.INVALID_ARGUMENT
     assert context.details == "bad"
 
 
@@ -69,22 +73,22 @@ def test_batch_size_from_tabular_tensor_and_empty_payload() -> None:
     """Compute batch size for supported shapes and reject empty payloads."""
     import onnx_model_serving.grpc.server as module
 
-    assert module._batch_size(ParsedInput(X=np.zeros((3, 2), dtype=np.float32))) == 3
+    assert module._batch_size(ParsedInput(X=np_zeros((3, 2), dtype=np_float32))) == 3
     assert (
         module._batch_size(
-            ParsedInput(tensors={"x": np.zeros((4, 1), dtype=np.float32)})
+            ParsedInput(tensors={"x": np_zeros((4, 1), dtype=np_float32)})
         )
         == 4
     )
     assert (
-        module._batch_size(ParsedInput(tensors={"x": np.array(1.0, dtype=np.float32)}))
+        module._batch_size(ParsedInput(tensors={"x": np_array(1.0, dtype=np_float32)}))
         == 1
     )
-    with pytest.raises(ValueError, match="no features/tensors"):
+    with pytest_raises(ValueError, match="no features/tensors"):
         module._batch_size(ParsedInput())
 
 
-def test_live_and_ready_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_and_ready_statuses(monkeypatch: pytest_MonkeyPatch) -> None:
     """Expose expected liveness/readiness payloads."""
     import onnx_model_serving.grpc.server as module
 
@@ -95,8 +99,8 @@ def test_live_and_ready_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     service = module.InferenceGrpcService(Settings())
 
-    live = asyncio.run(service.Live(object(), object()))
-    ready = asyncio.run(service.Ready(object(), object()))
+    live = asyncio_run(service.Live(object(), object()))
+    ready = asyncio_run(service.Ready(object(), object()))
 
     assert live.ok is True
     assert live.status == "live"
@@ -104,7 +108,7 @@ def test_live_and_ready_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
     assert ready.status == "ready"
 
 
-def test_ready_reports_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ready_reports_not_ready(monkeypatch: pytest_MonkeyPatch) -> None:
     """Report not_ready when adapter is unavailable."""
     import onnx_model_serving.grpc.server as module
 
@@ -114,12 +118,12 @@ def test_ready_reports_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda settings: _AdapterStub(ready=False),
     )
     service = module.InferenceGrpcService(Settings())
-    ready = asyncio.run(service.Ready(object(), object()))
+    ready = asyncio_run(service.Ready(object(), object()))
     assert ready.ok is False
     assert ready.status == "not_ready"
 
 
-def test_predict_success_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_predict_success_uses_defaults(monkeypatch: pytest_MonkeyPatch) -> None:
     """Use default content-type/accept and return metadata batch size."""
     import onnx_model_serving.grpc.server as module
 
@@ -133,7 +137,7 @@ def test_predict_success_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         payload: bytes, *, content_type: str, settings: Settings
     ) -> ParsedInput:
         _ = (payload, content_type, settings)
-        return ParsedInput(X=np.zeros((2, 2), dtype=np.float32))
+        return ParsedInput(X=np_zeros((2, 2), dtype=np_float32))
 
     def _format_output(
         predictions: object, *, accept: str, settings: Settings
@@ -149,8 +153,8 @@ def test_predict_success_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module, "format_output", _format_output)
 
     service = module.InferenceGrpcService(Settings())
-    request = types.SimpleNamespace(payload=b"{}", content_type="", accept="")
-    reply = asyncio.run(service.Predict(request, None))
+    request = types_SimpleNamespace(payload=b"{}", content_type="", accept="")
+    reply = asyncio_run(service.Predict(request, None))
 
     assert reply.body == b'{"predictions":[42]}'
     assert reply.content_type == "application/json"
@@ -158,7 +162,7 @@ def test_predict_success_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_predict_maps_value_error_to_invalid_argument(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Map validation errors to INVALID_ARGUMENT and empty reply payload."""
     import onnx_model_serving.grpc.server as module
@@ -171,20 +175,20 @@ def test_predict_maps_value_error_to_invalid_argument(
     monkeypatch.setattr(module, "parse_payload", _boom)
     service = module.InferenceGrpcService(Settings())
     context = _ContextRecorder()
-    request = types.SimpleNamespace(
+    request = types_SimpleNamespace(
         payload=b"{bad}",
         content_type="application/json",
         accept="application/json",
     )
-    reply = asyncio.run(service.Predict(request, context))
+    reply = asyncio_run(service.Predict(request, context))
 
-    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert context.code == grpc_StatusCode.INVALID_ARGUMENT
     assert context.details == "invalid input"
     assert reply.body == b""
 
 
 def test_predict_maps_unexpected_error_to_internal(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest_MonkeyPatch,
 ) -> None:
     """Map unexpected adapter/runtime errors to INTERNAL."""
     import onnx_model_serving.grpc.server as module
@@ -195,7 +199,7 @@ def test_predict_maps_unexpected_error_to_internal(
         payload: bytes, *, content_type: str, settings: Settings
     ) -> ParsedInput:
         _ = (payload, content_type, settings)
-        return ParsedInput(X=np.zeros((1, 1), dtype=np.float32))
+        return ParsedInput(X=np_zeros((1, 1), dtype=np_float32))
 
     monkeypatch.setattr(
         module,
@@ -209,19 +213,19 @@ def test_predict_maps_unexpected_error_to_internal(
     monkeypatch.setattr(module, "format_output", _explode)
     service = module.InferenceGrpcService(Settings())
     context = _ContextRecorder()
-    request = types.SimpleNamespace(
+    request = types_SimpleNamespace(
         payload=b"{}",
         content_type="application/json",
         accept="application/json",
     )
-    reply = asyncio.run(service.Predict(request, context))
+    reply = asyncio_run(service.Predict(request, context))
 
-    assert context.code == grpc.StatusCode.INTERNAL
+    assert context.code == grpc_StatusCode.INTERNAL
     assert context.details == "explode"
     assert reply.body == b""
 
 
-def test_create_server_registers_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_server_registers_service(monkeypatch: pytest_MonkeyPatch) -> None:
     """Register service and bind host/port."""
     import onnx_model_serving.grpc.server as module
 
@@ -246,7 +250,7 @@ def test_create_server_registers_service(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         module,
         "_require_grpc_stubs_module",
-        lambda: types.SimpleNamespace(
+        lambda: types_SimpleNamespace(
             add_InferenceServiceServicer_to_server=_fake_register
         ),
     )
@@ -261,7 +265,7 @@ def test_create_server_registers_service(monkeypatch: pytest.MonkeyPatch) -> Non
     assert calls["server"] is fake_server
 
 
-def test_main_starts_server(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_starts_server(monkeypatch: pytest_MonkeyPatch) -> None:
     """Parse args and run grpc server lifecycle."""
     import onnx_model_serving.grpc.server as module
 

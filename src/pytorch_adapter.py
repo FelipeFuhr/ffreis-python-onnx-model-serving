@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import importlib
-import os
 from contextlib import AbstractContextManager, nullcontext
+from importlib import import_module as importlib_import_module
+from os import path as os_path
 from typing import Protocol, Self, cast
 
-import numpy as np
+from numpy import asarray as np_asarray
+from numpy import generic as np_generic
+from numpy import ndarray as np_ndarray
 
 from base_adapter import BaseAdapter
 from config import Settings
@@ -35,7 +37,7 @@ class _TorchTensor(Protocol):
     def cpu(self: Self) -> _TorchTensor:
         """Move tensor to CPU."""
 
-    def numpy(self: Self) -> np.ndarray:
+    def numpy(self: Self) -> np_ndarray:
         """Convert tensor to NumPy array."""
 
 
@@ -60,7 +62,7 @@ class _TorchModule(Protocol):
     def load(self: Self, model_path: str, map_location: str = "cpu") -> _TorchModel:
         """Load eager model."""
 
-    def as_tensor(self: Self, array: np.ndarray) -> _TorchTensor:
+    def as_tensor(self: Self, array: np_ndarray) -> _TorchTensor:
         """Create tensor from ndarray."""
 
     def no_grad(self: Self) -> AbstractContextManager[None]:
@@ -74,11 +76,11 @@ class PytorchAdapter(BaseAdapter):
         """Load torch model from disk."""
         self.settings = settings
         model_filename = settings.model_filename.strip() or "model.pt"
-        model_path = os.path.join(settings.model_dir, model_filename)
-        if not os.path.exists(model_path):
+        model_path = os_path.join(settings.model_dir, model_filename)
+        if not os_path.exists(model_path):
             raise FileNotFoundError(f"PyTorch model not found at: {model_path}")
 
-        self._torch = cast(_TorchModule, importlib.import_module("torch"))
+        self._torch = cast(_TorchModule, importlib_import_module("torch"))
         self.model = self._load_model(model_path)
         self.model.eval()
 
@@ -93,8 +95,10 @@ class PytorchAdapter(BaseAdapter):
         """Report whether model is loaded."""
         return self.model is not None
 
-    def _extract_features(self: Self, parsed_input: ParsedInput) -> np.ndarray:
+    def _extract_features(self: Self, parsed_input: ParsedInput) -> np_ndarray:
         """Extract model input matrix from parsed input."""
+        if not isinstance(parsed_input, ParsedInput):
+            raise TypeError("PyTorch adapter expects ParsedInput")
         if parsed_input.X is not None:
             features = parsed_input.X
         elif parsed_input.tensors:
@@ -103,7 +107,7 @@ class PytorchAdapter(BaseAdapter):
             raise ValueError(
                 "PyTorch adapter requires ParsedInput.X or ParsedInput.tensors"
             )
-        array = np.asarray(features)
+        array = np_asarray(features)
         if array.ndim == 1:
             return array.reshape(1, -1)
         return array
@@ -113,7 +117,7 @@ class PytorchAdapter(BaseAdapter):
         if hasattr(self._torch, "Tensor") and isinstance(value, self._torch.Tensor):
             tensor_value = cast(_TorchTensor, value)
             return cast(PredictionValue, tensor_value.detach().cpu().numpy().tolist())
-        if isinstance(value, np.ndarray):
+        if isinstance(value, np_ndarray):
             return cast(PredictionValue, value.tolist())
         if isinstance(value, list):
             return [self._to_python(item) for item in value]
@@ -122,7 +126,7 @@ class PytorchAdapter(BaseAdapter):
         if isinstance(value, dict):
             mapped: JsonDict = {str(k): self._to_python(v) for k, v in value.items()}
             return mapped
-        if isinstance(value, np.generic):
+        if isinstance(value, np_generic):
             return cast(PredictionValue, value.item())
         return value
 

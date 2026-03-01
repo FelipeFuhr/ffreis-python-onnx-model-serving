@@ -3,14 +3,14 @@
 
 from __future__ import annotations
 
-import os
-import sys
-import xml.etree.ElementTree as ET
+from os import environ as os_environ
 from pathlib import Path
+from sys import exit as sys_exit
+from xml.etree.ElementTree import parse as ET_parse
 
 
 def _parse_float(name: str, default: float) -> float:
-    raw = os.environ.get(name)
+    raw = os_environ.get(name)
     if raw is None or raw.strip() == "":
         return default
     try:
@@ -21,8 +21,8 @@ def _parse_float(name: str, default: float) -> float:
 
 def main() -> int:
     """Validate XML line-rate against configured minimum and drift floor."""
-    label = os.environ.get("COVERAGE_LABEL", "coverage")
-    xml_path = Path(os.environ.get("COVERAGE_XML", "coverage.xml"))
+    label = os_environ.get("COVERAGE_LABEL", "coverage")
+    xml_path = Path(os_environ.get("COVERAGE_XML", "coverage.xml"))
     minimum = _parse_float("COVERAGE_MIN", 0.0)
     drift = _parse_float("COVERAGE_MAX_DRIFT", 0.0)
 
@@ -32,7 +32,7 @@ def main() -> int:
     if not xml_path.exists():
         raise SystemExit(f"Coverage XML not found: {xml_path}")
 
-    root = ET.parse(xml_path).getroot()
+    root = ET_parse(xml_path).getroot()
     raw_line_rate = root.attrib.get("line-rate")
     if raw_line_rate is None:
         raise SystemExit(f"line-rate attribute missing in {xml_path}")
@@ -55,4 +55,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys_exit(main())

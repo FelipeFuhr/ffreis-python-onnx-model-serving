@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import importlib
-import logging
+from argparse import ArgumentParser as argparse_ArgumentParser
+from asyncio import run as asyncio_run
+from asyncio import sleep as asyncio_sleep
+from asyncio import to_thread as asyncio_to_thread
 from dataclasses import dataclass, field
 from functools import partial
+from importlib import import_module as importlib_import_module
+from logging import basicConfig as logging_basicConfig
+from logging import getLogger as logging_getLogger
 from types import ModuleType
 from typing import Protocol, cast
 
-import grpc
+from grpc import ServicerContext as grpc_ServicerContext
+from grpc import StatusCode as grpc_StatusCode
+from grpc import aio as grpc_aio
 
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
@@ -19,7 +24,7 @@ from input_output import format_output, parse_payload
 from parsed_types import batch_size as _batch_size
 from value_types import PredictionValue
 
-log = logging.getLogger("byoc.grpc")
+log = logging_getLogger("byoc.grpc")
 
 
 @dataclass
@@ -57,7 +62,7 @@ class _PredictReplyLike(Protocol):
 def _load_grpc_stub_module(module_name: str) -> ModuleType | None:
     """Load grpc generated module by name when present."""
     try:
-        return importlib.import_module(module_name)
+        return importlib_import_module(module_name)
     except ModuleNotFoundError:
         return None
 
@@ -118,8 +123,8 @@ class _HealthRequestLike(Protocol):
 
 
 def _set_grpc_error(
-    context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
-    code: grpc.StatusCode,
+    context: grpc_ServicerContext | grpc_aio.ServicerContext | None,
+    code: grpc_StatusCode,
     details: str,
 ) -> None:
     """Safely set error code/details when context is available."""
@@ -146,21 +151,21 @@ class InferenceGrpcService:
     async def live(
         self: InferenceGrpcService,
         request: _HealthRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext,
     ) -> _StatusReplyLike:
         """Report process liveness."""
         _ = (request, context)
-        await asyncio.sleep(0)
+        await asyncio_sleep(0)
         return _status_reply(ok=True, status="live")
 
     async def ready(
         self: InferenceGrpcService,
         request: _HealthRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext,
     ) -> _StatusReplyLike:
         """Report model readiness."""
         _ = (request, context)
-        is_ready = bool(await asyncio.to_thread(self.adapter.is_ready))
+        is_ready = bool(await asyncio_to_thread(self.adapter.is_ready))
         return _status_reply(
             ok=is_ready,
             status="ready" if is_ready else "not_ready",
@@ -169,7 +174,7 @@ class InferenceGrpcService:
     async def predict(
         self: InferenceGrpcService,
         request: _PredictRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext | None,
     ) -> _PredictReplyLike:
         """Run model prediction for a payload."""
         content_type = request.content_type or self.settings.default_content_type
@@ -177,7 +182,7 @@ class InferenceGrpcService:
         payload = bytes(request.payload)
 
         try:
-            parsed_input = await asyncio.to_thread(
+            parsed_input = await asyncio_to_thread(
                 partial(
                     parse_payload,
                     payload,
@@ -190,10 +195,10 @@ class InferenceGrpcService:
                 raise ValueError(
                     f"too_many_records: {batch_size} > {self.settings.max_records}"
                 )
-            predictions: PredictionValue = await asyncio.to_thread(
+            predictions: PredictionValue = await asyncio_to_thread(
                 self.adapter.predict, parsed_input
             )
-            body, output_content_type = await asyncio.to_thread(
+            body, output_content_type = await asyncio_to_thread(
                 partial(
                     format_output,
                     predictions,
@@ -208,17 +213,17 @@ class InferenceGrpcService:
                 metadata={"batch_size": str(batch_size)},
             )
         except ValueError as exc:
-            _set_grpc_error(context, grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+            _set_grpc_error(context, grpc_StatusCode.INVALID_ARGUMENT, str(exc))
             return _predict_reply()
         except Exception as exc:  # pragma: no cover - unexpected adapter/runtime errors
             log.exception("Predict RPC failed")
-            _set_grpc_error(context, grpc.StatusCode.INTERNAL, str(exc))
+            _set_grpc_error(context, grpc_StatusCode.INTERNAL, str(exc))
             return _predict_reply()
 
     async def Live(
         self: InferenceGrpcService,
         request: _HealthRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext,
     ) -> _StatusReplyLike:
         """PascalCase entrypoint used by generated gRPC service wiring."""
         return await self.live(request, context)
@@ -226,7 +231,7 @@ class InferenceGrpcService:
     async def Ready(
         self: InferenceGrpcService,
         request: _HealthRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext,
     ) -> _StatusReplyLike:
         """PascalCase entrypoint used by generated gRPC service wiring."""
         return await self.ready(request, context)
@@ -234,7 +239,7 @@ class InferenceGrpcService:
     async def Predict(
         self: InferenceGrpcService,
         request: _PredictRequestLike,
-        context: grpc.ServicerContext | grpc.aio.ServicerContext | None,
+        context: grpc_ServicerContext | grpc_aio.ServicerContext | None,
     ) -> _PredictReplyLike:
         """PascalCase entrypoint used by generated gRPC service wiring."""
         return await self.predict(request, context)
@@ -246,7 +251,7 @@ def create_server(
     host: str,
     port: int,
     max_workers: int = 16,
-) -> grpc.aio.Server:
+) -> grpc_aio.Server:
     """Create configured gRPC server instance.
 
     Parameters
@@ -265,7 +270,7 @@ def create_server(
     grpc.aio.Server
         Configured server.
     """
-    server = grpc.aio.server(maximum_concurrent_rpcs=max_workers)
+    server = grpc_aio.server(maximum_concurrent_rpcs=max_workers)
     grpc_stubs = _require_grpc_stubs_module()
     grpc_stubs.add_InferenceServiceServicer_to_server(
         InferenceGrpcService(settings),
@@ -297,18 +302,18 @@ async def _serve(
 def main() -> None:
     """Run gRPC inference server entrypoint."""
     settings = Settings()
-    logging.basicConfig(
+    logging_basicConfig(
         level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(description="ONNX model serving gRPC endpoint.")
+    parser = argparse_ArgumentParser(description="ONNX model serving gRPC endpoint.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=50052)
     parser.add_argument("--max-workers", type=int, default=16)
     args = parser.parse_args()
 
-    asyncio.run(
+    asyncio_run(
         _serve(
             settings=settings,
             host=cast(str, args.host),

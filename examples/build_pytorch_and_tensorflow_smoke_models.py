@@ -2,49 +2,53 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
+from sys import argv as sys_argv
 from typing import Self
 
-import numpy as np
-import tensorflow as tf
-import torch
+from numpy import float32 as np_float32
+from numpy import ones as np_ones
+from tensorflow import keras as tf_keras
+from torch import Tensor as torch_Tensor
+from torch import jit as torch_jit
+from torch import nn as torch_nn
+from torch import no_grad as torch_no_grad
 
 
 def _build_pytorch_model(path: Path) -> None:
     """Write TorchScript model computing y = x @ 1."""
 
-    class SumModel(torch.nn.Module):
+    class SumModel(torch_nn.Module):
         def __init__(self: Self) -> None:
             super().__init__()
-            self.linear = torch.nn.Linear(3, 1, bias=False)
-            with torch.no_grad():
+            self.linear = torch_nn.Linear(3, 1, bias=False)
+            with torch_no_grad():
                 self.linear.weight.fill_(1.0)
 
-        def forward(self: Self, x: torch.Tensor) -> torch.Tensor:
+        def forward(self: Self, x: torch_Tensor) -> torch_Tensor:
             return self.linear(x.float())
 
     model = SumModel().eval()
-    scripted = torch.jit.script(model)
+    scripted = torch_jit.script(model)
     scripted.save(str(path))
 
 
 def _build_tensorflow_model(path: Path) -> None:
     """Write Keras model computing y = x @ 1."""
-    model = tf.keras.Sequential(
+    model = tf_keras.Sequential(
         [
-            tf.keras.Input(shape=(3,)),
-            tf.keras.layers.Dense(1, use_bias=False),
+            tf_keras.Input(shape=(3,)),
+            tf_keras.layers.Dense(1, use_bias=False),
         ]
     )
-    model.layers[0].set_weights([np.ones((3, 1), dtype=np.float32)])
+    model.layers[0].set_weights([np_ones((3, 1), dtype=np_float32)])
     model.save(path)
 
 
 def main() -> None:
     """Write PyTorch and TensorFlow smoke model artifacts."""
     output_dir = (
-        Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/onnx-runner-comparison")
+        Path(sys_argv[1]) if len(sys_argv) > 1 else Path("/tmp/onnx-runner-comparison")
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     pytorch_path = output_dir / "model.pt"

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from os import path as os_path
 
 from config import Settings
 from parsed_types import ParsedInput
@@ -97,41 +97,41 @@ def _infer_model_type_from_filename(settings: Settings) -> str | None:
     if not model_filename:
         return None
 
-    model_path = os.path.join(settings.model_dir, model_filename)
+    model_path = os_path.join(settings.model_dir, model_filename)
     lowered = model_filename.lower()
 
-    if lowered.endswith(".onnx") and os.path.exists(model_path):
+    if lowered.endswith(".onnx") and os_path.exists(model_path):
         return "onnx"
-    if lowered.endswith((".joblib", ".pkl")) and os.path.exists(model_path):
+    if lowered.endswith((".joblib", ".pkl")) and os_path.exists(model_path):
         return "sklearn"
-    if lowered.endswith((".pt", ".pth", ".jit", ".torchscript")) and os.path.exists(
+    if lowered.endswith((".pt", ".pth", ".jit", ".torchscript")) and os_path.exists(
         model_path
     ):
         return "pytorch"
-    if lowered.endswith((".keras", ".h5", ".hdf5")) and os.path.exists(model_path):
+    if lowered.endswith((".keras", ".h5", ".hdf5")) and os_path.exists(model_path):
         return "tensorflow"
-    if os.path.isdir(model_path) and os.path.exists(
-        os.path.join(model_path, "saved_model.pb")
+    if os_path.isdir(model_path) and os_path.exists(
+        os_path.join(model_path, "saved_model.pb")
     ):
         return "tensorflow"
     return None
 
 
 def _infer_model_type_from_defaults(settings: Settings) -> str | None:
-    onnx_default = os.path.join(settings.model_dir, "model.onnx")
-    sklearn_default = os.path.join(settings.model_dir, "model.joblib")
-    pickle_default = os.path.join(settings.model_dir, "model.pkl")
-    pytorch_default = os.path.join(settings.model_dir, "model.pt")
-    tensorflow_default = os.path.join(settings.model_dir, "model.keras")
-    tensorflow_saved_model_default = os.path.join(settings.model_dir, "saved_model")
+    onnx_default = os_path.join(settings.model_dir, "model.onnx")
+    sklearn_default = os_path.join(settings.model_dir, "model.joblib")
+    pickle_default = os_path.join(settings.model_dir, "model.pkl")
+    pytorch_default = os_path.join(settings.model_dir, "model.pt")
+    tensorflow_default = os_path.join(settings.model_dir, "model.keras")
+    tensorflow_saved_model_default = os_path.join(settings.model_dir, "saved_model")
 
-    if os.path.exists(onnx_default):
+    if os_path.exists(onnx_default):
         return "onnx"
-    if os.path.exists(sklearn_default) or os.path.exists(pickle_default):
+    if os_path.exists(sklearn_default) or os_path.exists(pickle_default):
         return "sklearn"
-    if os.path.exists(pytorch_default):
+    if os_path.exists(pytorch_default):
         return "pytorch"
-    if os.path.exists(tensorflow_default) or os.path.exists(
+    if os_path.exists(tensorflow_default) or os_path.exists(
         tensorflow_saved_model_default
     ):
         return "tensorflow"

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
+from sys import argv as sys_argv
 
-import onnx
 from onnx import TensorProto, helper
+from onnx import save as onnx_save
 
 
 def write_tiny_sum_model(path: Path) -> None:
@@ -18,12 +18,12 @@ def write_tiny_sum_model(path: Path) -> None:
     graph = helper.make_graph([matmul], "tiny_sum_graph", [x], [y], [w])
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)])
     path.parent.mkdir(parents=True, exist_ok=True)
-    onnx.save(model, str(path))
+    onnx_save(model, str(path))
 
 
 def main() -> None:
     """Write the smoke ONNX model to provided path or default location."""
-    output = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/models/model.onnx")
+    output = Path(sys_argv[1]) if len(sys_argv) > 1 else Path("/models/model.onnx")
     write_tiny_sum_model(output)
     print(f"wrote smoke ONNX model to {output}")
 

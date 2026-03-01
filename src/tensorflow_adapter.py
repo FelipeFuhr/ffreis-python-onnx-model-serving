@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import importlib
-import os
+from importlib import import_module as importlib_import_module
+from os import path as os_path
 from typing import Protocol, Self, cast
 
-import numpy as np
+from numpy import asarray as np_asarray
+from numpy import float32 as np_float32
+from numpy import generic as np_generic
+from numpy import ndarray as np_ndarray
 
 from base_adapter import BaseAdapter
 from config import Settings
@@ -16,11 +19,11 @@ from value_types import JsonDict, JsonValue, PredictionValue
 
 class _TensorflowModel(Protocol):
     def __call__(
-        self: Self, features: np.ndarray, training: bool = False
+        self: Self, features: np_ndarray, training: bool = False
     ) -> PredictionValue:
         """Run callable inference path."""
 
-    def predict(self: Self, features: np.ndarray, verbose: int = 0) -> PredictionValue:
+    def predict(self: Self, features: np_ndarray, verbose: int = 0) -> PredictionValue:
         """Run predict-style inference path."""
 
 
@@ -49,12 +52,12 @@ class TensorflowAdapter(BaseAdapter):
         """Load tensorflow model from disk."""
         self.settings = settings
         model_filename = settings.model_filename.strip() or "model.keras"
-        model_path = os.path.join(settings.model_dir, model_filename)
-        if not os.path.exists(model_path):
+        model_path = os_path.join(settings.model_dir, model_filename)
+        if not os_path.exists(model_path):
             raise FileNotFoundError(f"TensorFlow model not found at: {model_path}")
 
         self._tensorflow = cast(
-            _TensorflowModule, importlib.import_module("tensorflow")
+            _TensorflowModule, importlib_import_module("tensorflow")
         )
         keras_models = self._tensorflow.keras.models
         self.model = keras_models.load_model(model_path)
@@ -63,8 +66,10 @@ class TensorflowAdapter(BaseAdapter):
         """Report whether model is loaded."""
         return self.model is not None
 
-    def _extract_features(self: Self, parsed_input: ParsedInput) -> np.ndarray:
+    def _extract_features(self: Self, parsed_input: ParsedInput) -> np_ndarray:
         """Extract model input matrix from parsed input."""
+        if not isinstance(parsed_input, ParsedInput):
+            raise TypeError("TensorFlow adapter expects ParsedInput")
         if parsed_input.X is not None:
             features = parsed_input.X
         elif parsed_input.tensors:
@@ -73,14 +78,14 @@ class TensorflowAdapter(BaseAdapter):
             raise ValueError(
                 "TensorFlow adapter requires ParsedInput.X or ParsedInput.tensors"
             )
-        array = np.asarray(features)
+        array = np_asarray(features)
         if array.ndim == 1:
             return array.reshape(1, -1)
         return array
 
     def _to_python(self: Self, value: PredictionValue) -> PredictionValue:
         """Recursively convert framework outputs to JSON-serializable shapes."""
-        if isinstance(value, np.ndarray):
+        if isinstance(value, np_ndarray):
             return value.tolist()
         if isinstance(value, list):
             return [self._to_python(item) for item in value]
@@ -92,16 +97,16 @@ class TensorflowAdapter(BaseAdapter):
         numpy_method = getattr(value, "numpy", None)
         if callable(numpy_method):
             numpy_value = cast(_NumpyConvertible, value).numpy()
-            if isinstance(numpy_value, np.ndarray):
+            if isinstance(numpy_value, np_ndarray):
                 return cast(PredictionValue, numpy_value.tolist())
             return numpy_value
-        if isinstance(value, np.generic):
+        if isinstance(value, np_generic):
             return cast(PredictionValue, value.item())
         return value
 
     def predict(self: Self, parsed_input: ParsedInput) -> PredictionValue:
         """Run prediction with tensorflow model."""
-        features = self._extract_features(parsed_input).astype(np.float32, copy=False)
+        features = self._extract_features(parsed_input).astype(np_float32, copy=False)
 
         if callable(self.model):
             output = self.model(features, training=False)

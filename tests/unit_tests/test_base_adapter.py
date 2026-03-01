@@ -1,15 +1,17 @@
 """Test module."""
 
-import os
+from os import path as os_path
 from pathlib import Path
 from typing import Self
 
-import pytest
+from pytest import MonkeyPatch as pytest_MonkeyPatch
+from pytest import mark as pytest_mark
+from pytest import raises as pytest_raises
 
 from base_adapter import BaseAdapter, load_adapter
 from config import Settings
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest_mark.unit
 
 
 class _RaisesAdapter(BaseAdapter):
@@ -51,13 +53,13 @@ class TestBaseAdapter:
             Does not return a value; assertions validate expected behavior.
         """
         adapter = _RaisesAdapter()
-        with pytest.raises(NotImplementedError):
+        with pytest_raises(NotImplementedError):
             adapter.is_ready()
-        with pytest.raises(NotImplementedError):
+        with pytest_raises(NotImplementedError):
             adapter.predict(None)
 
     def test_load_adapter_uses_onnx_when_model_type_is_onnx(
-        self: Self, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest_MonkeyPatch
     ) -> None:
         """Validate load adapter uses onnx when model type is onnx.
 
@@ -87,7 +89,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakeOnnx)
 
     def test_load_adapter_uses_onnx_when_default_model_exists(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate load adapter uses onnx when default model exists.
 
@@ -120,10 +122,10 @@ class TestBaseAdapter:
         settings = Settings()
         out = load_adapter(settings)
         assert isinstance(out, FakeOnnx)
-        assert os.path.exists(model_path)
+        assert os_path.exists(model_path)
 
     def test_load_adapter_rejects_unknown_model_types(
-        self: Self, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest_MonkeyPatch
     ) -> None:
         """Validate load adapter rejects unsupported model types.
 
@@ -139,11 +141,11 @@ class TestBaseAdapter:
         """
         monkeypatch.setenv("MODEL_TYPE", "xgboost")
         settings = Settings()
-        with pytest.raises(RuntimeError, match="not implemented"):
+        with pytest_raises(RuntimeError, match="not implemented"):
             load_adapter(settings)
 
     def test_load_adapter_uses_sklearn_when_model_type_is_sklearn(
-        self: Self, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest_MonkeyPatch
     ) -> None:
         """Validate load adapter uses sklearn when model type is sklearn."""
 
@@ -162,7 +164,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakeSklearn)
 
     def test_load_adapter_uses_pytorch_when_model_type_is_pytorch(
-        self: Self, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest_MonkeyPatch
     ) -> None:
         """Validate load adapter uses pytorch when model type is pytorch."""
 
@@ -181,7 +183,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakePytorch)
 
     def test_load_adapter_uses_tensorflow_when_model_type_is_tensorflow(
-        self: Self, monkeypatch: pytest.MonkeyPatch
+        self: Self, monkeypatch: pytest_MonkeyPatch
     ) -> None:
         """Validate load adapter uses tensorflow when model type is tensorflow."""
 
@@ -200,7 +202,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakeTensorflow)
 
     def test_load_adapter_uses_sklearn_when_default_model_exists(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate load adapter auto-detects sklearn artifact."""
         model_path = tmp_path / "model.joblib"
@@ -220,10 +222,10 @@ class TestBaseAdapter:
         settings = Settings()
         out = load_adapter(settings)
         assert isinstance(out, FakeSklearn)
-        assert os.path.exists(model_path)
+        assert os_path.exists(model_path)
 
     def test_load_adapter_requires_model_type_or_file(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Validate load adapter requires model type or file.
 
@@ -242,14 +244,14 @@ class TestBaseAdapter:
         monkeypatch.setenv("MODEL_TYPE", "")
         monkeypatch.setenv("SM_MODEL_DIR", str(tmp_path))
         settings = Settings()
-        with pytest.raises(
+        with pytest_raises(
             RuntimeError,
             match="Set MODEL_TYPE=onnx\\|sklearn\\|pytorch\\|tensorflow",
         ):
             load_adapter(settings)
 
     def test_load_adapter_detects_pytorch_by_filename(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Auto-detect pytorch adapter from MODEL_FILENAME extension."""
         model_path = tmp_path / "custom_model.pt"
@@ -267,10 +269,10 @@ class TestBaseAdapter:
         monkeypatch.setenv("SM_MODEL_DIR", str(tmp_path))
         out = load_adapter(Settings())
         assert isinstance(out, FakePytorch)
-        assert os.path.exists(model_path)
+        assert os_path.exists(model_path)
 
     def test_load_adapter_detects_tensorflow_by_filename(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Auto-detect tensorflow adapter from MODEL_FILENAME extension."""
         model_path = tmp_path / "custom_model.keras"
@@ -288,10 +290,10 @@ class TestBaseAdapter:
         monkeypatch.setenv("SM_MODEL_DIR", str(tmp_path))
         out = load_adapter(Settings())
         assert isinstance(out, FakeTensorflow)
-        assert os.path.exists(model_path)
+        assert os_path.exists(model_path)
 
     def test_load_adapter_detects_tensorflow_saved_model_dir(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Auto-detect tensorflow adapter from SavedModel folder."""
         saved_model_dir = tmp_path / "saved_model"
@@ -312,7 +314,7 @@ class TestBaseAdapter:
         assert isinstance(out, FakeTensorflow)
 
     def test_load_adapter_uses_default_pytorch_model(
-        self: Self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self: Self, monkeypatch: pytest_MonkeyPatch, tmp_path: Path
     ) -> None:
         """Auto-detect default ``model.pt`` when MODEL_FILENAME is empty."""
         model_path = tmp_path / "model.pt"
@@ -330,4 +332,4 @@ class TestBaseAdapter:
         monkeypatch.setenv("SM_MODEL_DIR", str(tmp_path))
         out = load_adapter(Settings())
         assert isinstance(out, FakePytorch)
-        assert os.path.exists(model_path)
+        assert os_path.exists(model_path)

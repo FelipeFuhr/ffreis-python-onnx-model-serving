@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import importlib
-import logging
 from contextlib import AbstractContextManager
+from importlib import import_module as importlib_import_module
+from logging import getLogger as logging_getLogger
 from typing import Protocol, cast
 
 from fastapi import FastAPI
 
 from config import Settings
 
-log = logging.getLogger("otel")
+log = logging_getLogger("otel")
 
 
 class SpanContextProtocol(Protocol):
@@ -171,53 +171,53 @@ def _load_optional_telemetry_components() -> None:
 
     try:
         trace = cast(
-            TraceModuleProtocol, importlib.import_module("opentelemetry").trace
+            TraceModuleProtocol, importlib_import_module("opentelemetry").trace
         )
         propagate = cast(
             PropagatorModuleProtocol,
-            importlib.import_module("opentelemetry.propagate"),
+            importlib_import_module("opentelemetry.propagate"),
         )
         OTLPSpanExporter = cast(
             ExporterFactoryProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.exporter.otlp.proto.http.trace_exporter"
             ).OTLPSpanExporter,
         )
         FastAPIInstrumentor = cast(
             FastApiInstrumentorProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.instrumentation.fastapi"
             ).FastAPIInstrumentor,
         )
         LoggingInstrumentor = cast(
             InstrumentorFactoryProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.instrumentation.logging"
             ).LoggingInstrumentor,
         )
         RequestsInstrumentor = cast(
             InstrumentorFactoryProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.instrumentation.requests"
             ).RequestsInstrumentor,
         )
         HTTPXClientInstrumentor = cast(
             InstrumentorFactoryProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.instrumentation.httpx"
             ).HTTPXClientInstrumentor,
         )
         Resource = cast(
             ResourceProtocol,
-            importlib.import_module("opentelemetry.sdk.resources").Resource,
+            importlib_import_module("opentelemetry.sdk.resources").Resource,
         )
         TracerProvider = cast(
             TracerProviderFactoryProtocol,
-            importlib.import_module("opentelemetry.sdk.trace").TracerProvider,
+            importlib_import_module("opentelemetry.sdk.trace").TracerProvider,
         )
         BatchSpanProcessor = cast(
             BatchProcessorFactoryProtocol,
-            importlib.import_module(
+            importlib_import_module(
                 "opentelemetry.sdk.trace.export"
             ).BatchSpanProcessor,
         )
