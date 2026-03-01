@@ -57,14 +57,15 @@ jobs:
       - name: Install Trivy
         run: |
           set -euo pipefail
-          TRIVY_VERSION="0.67.2"
-          curl -sfL \
-            --proto '=https' \
-            --proto-redir '=https' \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            -o /tmp/trivy.tar.gz
-          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
-          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+            gpg --dearmor | \
+            sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
+            sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
           trivy --version
 
       - name: Scan images (sequential, Podman)
