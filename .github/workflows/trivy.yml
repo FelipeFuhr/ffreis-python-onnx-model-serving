@@ -79,10 +79,10 @@ jobs:
 
           for image in "${images[@]}"; do
             name="${image##*/}"
-            archive="trivy-results/${name}.oci.tar"
+            archive="trivy-results/${name}.docker.tar"
 
             podman image exists "${image}"
-            podman save --format oci-archive --output "${archive}" "${image}"
+            podman save --format docker-archive --output "${archive}" "${image}"
 
             trivy image \
               --input "${archive}" \
