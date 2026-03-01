@@ -25,8 +25,12 @@ try:
     from grpc import StatusCode as grpc_StatusCode
 
     from onnx_model_serving.grpc.server import InferenceGrpcService
-    from onnx_serving_grpc.inference_pb2 import DESCRIPTOR as inference_pb2_DESCRIPTOR
-    from onnx_serving_grpc.inference_pb2 import LiveRequest as inference_pb2_LiveRequest
+    from onnx_serving_grpc.inference_pb2 import (
+        DESCRIPTOR as inference_pb2_DESCRIPTOR,
+    )
+    from onnx_serving_grpc.inference_pb2 import (
+        LiveRequest as inference_pb2_LiveRequest,
+    )
     from onnx_serving_grpc.inference_pb2 import (
         PredictReply as inference_pb2_PredictReply,
     )
@@ -36,7 +40,9 @@ try:
     from onnx_serving_grpc.inference_pb2 import (
         ReadyRequest as inference_pb2_ReadyRequest,
     )
-    from onnx_serving_grpc.inference_pb2 import StatusReply as inference_pb2_StatusReply
+    from onnx_serving_grpc.inference_pb2 import (
+        StatusReply as inference_pb2_StatusReply,
+    )
 except (ImportError, ModuleNotFoundError) as exc:
     pytest_skip(f"grpc parity dependencies unavailable: {exc}", allow_module_level=True)
 
