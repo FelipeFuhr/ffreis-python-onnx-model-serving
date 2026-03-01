@@ -18,10 +18,12 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
+    "grpcio>=1.78.0",
     "uvicorn>=0.30.0",
     "onnx>=1.17.0",
     "onnxruntime>=1.20.0",
     "prometheus-fastapi-instrumentator>=7.0.0",
+    "protobuf>=6.31.1",
     "opentelemetry-api>=1.27.0",
     "opentelemetry-sdk>=1.27.0",
     "opentelemetry-exporter-otlp>=1.27.0",
@@ -35,9 +37,11 @@ dev = [
     "pre-commit>=3.8.0",
 ]
 examples = [
+    "grpcio>=1.78.0",
     "httpx>=0.27.0",
     "onnx>=1.17.0",
     "onnxruntime>=1.20.0",
+    "protobuf>=6.31.1",
     "scikit-learn>=1.6.0",
     "skl2onnx>=1.18.0",
     "uvicorn>=0.30.0",
@@ -45,6 +49,9 @@ examples = [
 grpc = [
     "grpcio>=1.78.0",
     "protobuf>=6.31.1",
+]
+onnx = [
+    "onnxruntime>=1.20.0",
 ]
 sklearn = [
     "scikit-learn>=1.6.0",

@@ -45,28 +45,56 @@ class BaseAdapter(ABC):
 _SUPPORTED_MODEL_TYPES = frozenset({"onnx", "sklearn", "pytorch", "tensorflow"})
 
 
+def _missing_extra_runtime_error(extra: str, module_name: str) -> RuntimeError:
+    """Build actionable error for missing optional runtime dependencies."""
+    return RuntimeError(
+        f"Missing optional dependency '{module_name}' for MODEL_TYPE={extra}. "
+        f"Install with: uv sync --extra {extra}"
+    )
+
+
 def _build_onnx_adapter(settings: Settings) -> BaseAdapter:
     from onnx_adapter import OnnxAdapter
 
-    return OnnxAdapter(settings)
+    try:
+        return OnnxAdapter(settings)
+    except ModuleNotFoundError as exc:
+        if exc.name == "onnxruntime":
+            raise _missing_extra_runtime_error("onnx", "onnxruntime") from exc
+        raise
 
 
 def _build_sklearn_adapter(settings: Settings) -> BaseAdapter:
     from sklearn_adapter import SklearnAdapter
 
-    return SklearnAdapter(settings)
+    try:
+        return SklearnAdapter(settings)
+    except ModuleNotFoundError as exc:
+        if exc.name == "sklearn":
+            raise _missing_extra_runtime_error("sklearn", "scikit-learn") from exc
+        raise
 
 
 def _build_pytorch_adapter(settings: Settings) -> BaseAdapter:
     from pytorch_adapter import PytorchAdapter
 
-    return PytorchAdapter(settings)
+    try:
+        return PytorchAdapter(settings)
+    except ModuleNotFoundError as exc:
+        if exc.name == "torch":
+            raise _missing_extra_runtime_error("torch", "torch") from exc
+        raise
 
 
 def _build_tensorflow_adapter(settings: Settings) -> BaseAdapter:
     from tensorflow_adapter import TensorflowAdapter
 
-    return TensorflowAdapter(settings)
+    try:
+        return TensorflowAdapter(settings)
+    except ModuleNotFoundError as exc:
+        if exc.name == "tensorflow":
+            raise _missing_extra_runtime_error("tensorflow", "tensorflow") from exc
+        raise
 
 
 _ADAPTER_BUILDERS: dict[str, Callable[[Settings], BaseAdapter]] = {
